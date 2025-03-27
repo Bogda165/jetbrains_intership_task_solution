@@ -9,6 +9,7 @@ use tokio::{
 
 pub mod http_messages;
 pub mod serealize;
+pub mod simple_solution;
 
 use serealize::{Deserialize, Serialize};
 
