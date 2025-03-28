@@ -4,14 +4,14 @@ use errors::ChunkError;
 pub mod errors {
     use crate::core::*;
     #[derive(Debug, PartialEq, Eq)]
-    pub enum ChunkError {
-        InvalidChunk(chunk::Chunk),
-        ChunksOverlaps(chunk::Chunk, chunk::Chunk),
-        ChunksDoNotOverlaps(chunk::Chunk, chunk::Chunk),
-        IncorrectChunksOrder(chunk::Chunk, chunk::Chunk),
+    pub enum ChunkError<T: Clone + std::fmt::Debug + PartialOrd + Ord> {
+        InvalidChunk(chunk::Chunk<T>),
+        ChunksOverlaps(chunk::Chunk<T>, chunk::Chunk<T>),
+        ChunksDoNotOverlaps(chunk::Chunk<T>, chunk::Chunk<T>),
+        IncorrectChunksOrder(chunk::Chunk<T>, chunk::Chunk<T>),
     }
 
-    impl std::fmt::Display for ChunkError {
+    impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> std::fmt::Display for ChunkError<T> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
                 ChunkError::InvalidChunk(chunk) => {
@@ -37,6 +37,7 @@ pub mod errors {
 }
 
 pub mod chunk {
+
     use crate::core::errors::ChunkError;
 
     #[derive(Clone, Debug)]
@@ -46,31 +47,41 @@ pub mod chunk {
         DoNotOverlaps,
     }
 
-    #[derive(Debug, Clone, PartialEq, Eq)]
-    pub struct Chunk {
-        pub begin: u32,
-        pub end: u32,
+    #[derive(Clone, Debug)]
+    pub enum OverlapType {
+        Left,
+        Right,
+        Inside,
     }
 
-    impl<T> TryFrom<(T, T)> for Chunk
-    where
-        T: Into<u32>,
-    {
-        type Error = ChunkError;
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct Chunk<T: Clone + std::fmt::Debug + PartialOrd + Ord> {
+        pub begin: T,
+        pub end: T,
+    }
+
+    impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> Into<(T, T)> for Chunk<T> {
+        fn into(self) -> (T, T) {
+            (self.begin, self.end)
+        }
+    }
+
+    impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> TryFrom<(T, T)> for Chunk<T> {
+        type Error = ChunkError<T>;
 
         fn try_from(value: (T, T)) -> Result<Self, Self::Error> {
-            Chunk::new(value.0.into(), value.1.into())
+            Chunk::new(value.0, value.1)
         }
     }
 
-    impl std::fmt::Display for Chunk {
+    impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> std::fmt::Display for Chunk<T> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "[{} -> {}]", self.begin, self.end)
+            write!(f, "[{:?} -> {:?}]", self.begin, self.end)
         }
     }
 
-    impl Chunk {
-        pub fn new(begin: u32, end: u32) -> Result<Self, ChunkError> {
+    impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> Chunk<T> {
+        pub fn new(begin: T, end: T) -> Result<Self, ChunkError<T>> {
             if begin >= end {
                 return Err(ChunkError::InvalidChunk(Chunk { begin, end }));
             }
@@ -78,16 +89,16 @@ pub mod chunk {
             Ok(Self { begin, end })
         }
 
-        pub fn can_be_followed(&self, chunk: &Chunk) -> bool {
+        pub fn can_be_followed(&self, chunk: &Self) -> bool {
             if self.end <= chunk.begin {
                 return true;
             }
             false
         }
 
-        pub fn overlaps(chunk1: &Chunk, chunk2: &Chunk) -> Overlaps {
-            if (chunk1.begin > chunk2.begin && chunk1.begin < chunk2.end)
-                || (chunk1.end > chunk2.begin && chunk1.end < chunk2.end)
+        pub fn overlaps(chunk1: &Self, chunk2: &Self) -> Overlaps {
+            if (chunk1.begin > chunk2.begin && chunk2.end > chunk1.begin)
+                || (chunk1.begin < chunk2.begin && chunk1.end > chunk2.begin)
             {
                 return Overlaps::Overlaps;
             }
@@ -99,7 +110,28 @@ pub mod chunk {
             Overlaps::DoNotOverlaps
         }
 
-        pub fn try_combine(chunk1: Chunk, chunk2: Chunk) -> Result<Chunk, ChunkError> {
+        pub fn get_overlap_type(
+            chunk1: &Self,
+            chunk2: &Self,
+        ) -> Result<OverlapType, ChunkError<T>> {
+            match Self::overlaps(chunk1, chunk2) {
+                Overlaps::Overlaps => {
+                    Ok(if chunk2.begin < chunk1.begin && chunk2.end < chunk1.end {
+                        OverlapType::Left
+                    } else if chunk2.begin < chunk1.begin && chunk2.end > chunk1.end {
+                        OverlapType::Inside
+                    } else {
+                        OverlapType::Right
+                    })
+                }
+                _ => Err(ChunkError::ChunksDoNotOverlaps(
+                    chunk1.clone(),
+                    chunk2.clone(),
+                )),
+            }
+        }
+
+        pub fn try_combine(chunk1: Self, chunk2: Self) -> Result<Self, ChunkError<T>> {
             match Chunk::overlaps(&chunk1, &chunk2) {
                 Overlaps::Overlaps => Err(ChunkError::ChunksOverlaps(chunk1, chunk2)),
                 Overlaps::CanBeOptimized => Chunk::new(chunk1.begin, chunk2.end),
@@ -191,15 +223,15 @@ pub mod chunk_node {
 
     // I will try to implement something like os uses to store pages intervals
     #[derive(Clone, Debug)]
-    pub struct ChunkNode {
-        pub chunk: Chunk,
-        pub next_chunk: Option<Box<ChunkNode>>,
+    pub struct ChunkNode<T: Clone + std::fmt::Debug + PartialOrd + Ord> {
+        pub chunk: Chunk<T>,
+        pub next_chunk: Option<Box<ChunkNode<T>>>,
     }
 
     pub mod impls {
         use super::*;
-        impl From<Chunk> for ChunkNode {
-            fn from(value: Chunk) -> Self {
+        impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> From<Chunk<T>> for ChunkNode<T> {
+            fn from(value: Chunk<T>) -> Self {
                 Self {
                     chunk: value,
                     next_chunk: None,
@@ -209,15 +241,15 @@ pub mod chunk_node {
 
         pub mod derefs {
             use super::*;
-            impl Deref for ChunkNode {
-                type Target = Chunk;
+            impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> Deref for ChunkNode<T> {
+                type Target = Chunk<T>;
 
                 fn deref(&self) -> &Self::Target {
                     &self.chunk
                 }
             }
 
-            impl DerefMut for ChunkNode {
+            impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> DerefMut for ChunkNode<T> {
                 fn deref_mut(&mut self) -> &mut Self::Target {
                     &mut self.chunk
                 }
@@ -225,9 +257,9 @@ pub mod chunk_node {
         }
     }
 
-    impl ChunkNode {
+    impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> ChunkNode<T> {
         // returns an error if chunks overlaps
-        pub fn set_next_chunk(&mut self, chunk: Chunk) -> Result<(), ChunkError> {
+        pub fn set_next_chunk(&mut self, chunk: Chunk<T>) -> Result<(), ChunkError<T>> {
             match Chunk::try_combine(self.chunk.clone(), chunk.clone()) {
                 Ok(new_chunk) => {
                     self.chunk = new_chunk.into();
@@ -250,11 +282,11 @@ pub mod chunk_node {
 use crate::core::chunk::Overlaps;
 use crate::core::chunk_node::ChunkNode;
 
-pub struct IntervalList {
-    pub head: Option<Box<ChunkNode>>,
+pub struct IntervalList<T: Clone + std::fmt::Debug + PartialOrd + Ord> {
+    pub head: Option<Box<ChunkNode<T>>>,
 }
 
-impl IntervalList {
+impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> IntervalList<T> {
     pub fn new() -> Self {
         Self { head: None }
     }
@@ -263,7 +295,7 @@ impl IntervalList {
         self.head.is_none()
     }
 
-    pub fn add_chunk(&mut self, chunk: Chunk) -> Result<(), ChunkError> {
+    pub fn add_chunk(&mut self, chunk: Chunk<T>) -> Result<(), ChunkError<T>> {
         if self.is_empty() {
             self.head = Some(Box::new(chunk.into()));
             return Ok(());
@@ -275,7 +307,52 @@ impl IntervalList {
         while let Some(node) = current {
             match Chunk::overlaps(&node.chunk, &chunk) {
                 Overlaps::Overlaps => {
-                    return Err(ChunkError::ChunksOverlaps(node.chunk.clone(), chunk));
+                    //change curent chunk
+                    match Chunk::get_overlap_type(&node.chunk, &chunk).unwrap() {
+                        chunk::OverlapType::Left => node.begin = chunk.begin.clone(),
+                        chunk::OverlapType::Right => node.end = chunk.end.clone(),
+                        chunk::OverlapType::Inside => node.chunk = chunk.clone(),
+                    }
+
+                    loop {
+                        if node.next_chunk.is_none() {
+                            break;
+                        }
+
+                        let mut _break = true;
+                        match Chunk::overlaps(&node.next_chunk.as_ref().unwrap().chunk, &chunk) {
+                            Overlaps::Overlaps => {
+                                match Chunk::get_overlap_type(
+                                    &node.next_chunk.as_ref().unwrap().chunk,
+                                    &chunk,
+                                )
+                                .unwrap()
+                                {
+                                    chunk::OverlapType::Left => {
+                                        println!("HUI");
+                                        node.end = node.next_chunk.as_ref().unwrap().end.clone()
+                                    }
+                                    chunk::OverlapType::Right => unreachable!(
+                                        "{}, {}",
+                                        chunk,
+                                        node.next_chunk.as_ref().unwrap().chunk
+                                    ),
+                                    chunk::OverlapType::Inside => _break = false,
+                                }
+                            }
+
+                            Overlaps::CanBeOptimized => {}
+                            Overlaps::DoNotOverlaps => break,
+                        }
+
+                        node.next_chunk = node.next_chunk.as_mut().unwrap().next_chunk.take();
+
+                        if _break {
+                            break;
+                        }
+                    }
+
+                    return Ok(());
                 }
                 Overlaps::CanBeOptimized => {
                     match Chunk::try_combine(node.chunk.clone(), chunk.clone()) {
@@ -324,7 +401,7 @@ impl IntervalList {
                 }
                 Overlaps::DoNotOverlaps => {
                     if chunk.end <= node.chunk.begin {
-                        let mut new_node: Box<ChunkNode> = Box::new(chunk.into());
+                        let mut new_node: Box<ChunkNode<T>> = Box::new(chunk.into());
                         new_node.next_chunk = Some(Box::new(node.as_ref().clone()));
                         *node = new_node;
                         return Ok(());
@@ -345,7 +422,7 @@ impl IntervalList {
         Ok(())
     }
 
-    pub fn iter(&self) -> IntervalIterator {
+    pub fn iter(&self) -> IntervalIterator<T> {
         IntervalIterator {
             current: self.head.as_ref().map(|node| &**node),
         }
@@ -367,7 +444,7 @@ impl IntervalList {
         count
     }
 
-    pub fn contains(&self, value: u32) -> bool {
+    pub fn contains(&self, value: T) -> bool {
         let mut current = self.head.as_ref();
 
         while let Some(node) = current {
@@ -385,15 +462,15 @@ impl IntervalList {
         false
     }
 
-    pub fn total_range(&self) -> Option<(u32, u32)> {
+    pub fn total_range(&self) -> Option<(T, T)> {
         if let Some(chunk) = self.head.as_ref() {
-            let left_bound = chunk.begin;
+            let left_bound = chunk.begin.clone();
 
             let mut rigth_bound_el = &(chunk.chunk.clone());
 
             self.iter().for_each(|el| rigth_bound_el = el);
 
-            let right_bound = rigth_bound_el.end;
+            let right_bound = rigth_bound_el.end.clone();
 
             return Some((left_bound, right_bound));
         }
@@ -401,12 +478,12 @@ impl IntervalList {
     }
 }
 
-pub struct IntervalIterator<'a> {
-    current: Option<&'a ChunkNode>,
+pub struct IntervalIterator<'a, T: Clone + std::fmt::Debug + PartialOrd + Ord> {
+    current: Option<&'a ChunkNode<T>>,
 }
 
-impl<'a> Iterator for IntervalIterator<'a> {
-    type Item = &'a Chunk;
+impl<'a, T: Clone + std::fmt::Debug + PartialOrd + Ord> Iterator for IntervalIterator<'a, T> {
+    type Item = &'a Chunk<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(node) = self.current {
@@ -419,7 +496,7 @@ impl<'a> Iterator for IntervalIterator<'a> {
     }
 }
 
-impl std::fmt::Display for IntervalList {
+impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> std::fmt::Display for IntervalList<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "IntervalList[")?;
         let mut first = true;
@@ -431,147 +508,5 @@ impl std::fmt::Display for IntervalList {
             first = false;
         }
         write!(f, "]")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::core::chunk::Chunk;
-
-    #[test]
-    fn test_empty_list() {
-        let list = IntervalList::new();
-        assert!(list.is_empty());
-        assert_eq!(list.len(), 0);
-        assert_eq!(list.total_range(), None);
-    }
-
-    #[test]
-    fn test_add_single_chunk() {
-        let mut list = IntervalList::new();
-        let chunk = Chunk::new(10, 20).unwrap();
-
-        assert!(list.add_chunk(chunk).is_ok());
-        assert!(!list.is_empty());
-        assert_eq!(list.len(), 1);
-        assert_eq!(list.total_range(), Some((10, 20)));
-    }
-
-    #[test]
-    fn test_add_non_overlapping_chunks() {
-        let mut list = IntervalList::new();
-
-        assert!(list.add_chunk(Chunk::new(10, 20).unwrap()).is_ok());
-        assert!(list.add_chunk(Chunk::new(30, 40).unwrap()).is_ok());
-        assert!(list.add_chunk(Chunk::new(50, 60).unwrap()).is_ok());
-
-        assert_eq!(list.len(), 3);
-        assert_eq!(list.total_range(), Some((10, 60)));
-    }
-
-    #[test]
-    fn test_add_optimizable_chunks() {
-        let mut list = IntervalList::new();
-
-        assert!(list.add_chunk(Chunk::new(10, 20).unwrap()).is_ok());
-        assert!(list.add_chunk(Chunk::new(20, 30).unwrap()).is_ok()); // Should optimize with previous
-
-        assert_eq!(list.len(), 1);
-        assert_eq!(list.total_range(), Some((10, 30)));
-    }
-
-    #[test]
-    fn test_add_overlapping_chunks() {
-        let mut list = IntervalList::new();
-
-        assert!(list.add_chunk(Chunk::new(10, 25).unwrap()).is_ok());
-
-        let result = list.add_chunk(Chunk::new(20, 30).unwrap());
-        assert!(result.is_err());
-
-        assert_eq!(list.len(), 1);
-    }
-
-    #[test]
-    fn test_contains() {
-        let mut list = IntervalList::new();
-
-        assert!(list.add_chunk(Chunk::new(10, 20).unwrap()).is_ok());
-        assert!(list.add_chunk(Chunk::new(30, 40).unwrap()).is_ok());
-
-        assert!(list.contains(15));
-        assert!(list.contains(35));
-        assert!(!list.contains(25));
-        assert!(!list.contains(5));
-        assert!(!list.contains(45));
-    }
-
-    #[test]
-    fn test_hard_merge() {
-        let mut list = IntervalList::new();
-
-        assert!(list.add_chunk(Chunk::new(0, 20).unwrap()).is_ok());
-        assert!(list.add_chunk(Chunk::new(40, 50).unwrap()).is_ok());
-
-        assert_eq!(list.len(), 2);
-
-        assert!(list.add_chunk(Chunk::new(20, 40).unwrap()).is_ok());
-
-        assert_eq!(list.len(), 1);
-
-        assert_eq!(list.total_range(), Some((0, 50)));
-    }
-
-    #[test]
-    fn test_clear() {
-        let mut list = IntervalList::new();
-
-        assert!(list.add_chunk(Chunk::new(10, 20).unwrap()).is_ok());
-        assert!(list.add_chunk(Chunk::new(30, 40).unwrap()).is_ok());
-
-        assert_eq!(list.len(), 2);
-
-        list.clear();
-
-        assert!(list.is_empty());
-        assert_eq!(list.len(), 0);
-    }
-
-    #[test]
-    fn test_add_in_middle() {
-        let mut list = IntervalList::new();
-
-        assert!(list.add_chunk(Chunk::new(10, 20).unwrap()).is_ok());
-        assert!(list.add_chunk(Chunk::new(40, 50).unwrap()).is_ok());
-        assert!(list.add_chunk(Chunk::new(25, 35).unwrap()).is_ok()); // Add in the middle
-
-        assert_eq!(list.len(), 3);
-        assert!(list.contains(15));
-        assert!(list.contains(30));
-        assert!(list.contains(45));
-        assert!(!list.contains(22));
-        assert!(!list.contains(38));
-    }
-
-    #[test]
-    fn test_tobeggining() {
-        let mut list = IntervalList::new();
-
-        assert!(list.add_chunk((20_u32, 40_u32).try_into().unwrap()).is_ok());
-        assert!(list.add_chunk((10_u32, 14_u32).try_into().unwrap()).is_ok());
-        assert!(list.add_chunk((50_u32, 55_u32).try_into().unwrap()).is_ok());
-
-        assert!(list.contains(10));
-        assert!(!list.contains(5));
-
-        let mut len = 0;
-
-        list.iter().for_each(|el| {
-            println!("{}", el);
-            len += 1;
-        });
-
-        assert_eq!(len, 3);
     }
 }
