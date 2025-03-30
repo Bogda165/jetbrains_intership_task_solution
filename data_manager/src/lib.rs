@@ -1,45 +1,97 @@
-use std::path::Display;
-
-use core_crate::core::{IntervalList, chunk::*};
-use rand::Fill;
+use core_crate::{chunk::Chunk, core::IntervalList};
+use manager::{Manager, basic_manager::BasicManager};
 use server_simulator::{DataHolder, Server};
 
-pub mod tests;
+mod tests;
+
+pub mod manager;
 
 pub mod server_simulator;
 
-// trait Manager {
-//     type Data: DataHolder<DataType: Clone + std::fmt::Debug + PartialOrd>;
+// I could played more with generics of DataType but I decided to hard-code it due to potential errors in types converstaions
+trait ManagerWrapper<ManagerT: Manager> {
+    type Data: DataHolder<DataType = u8>;
 
-//     fn get_interval_list(&self) -> &IntervalList<u8>;
+    fn get_data_holder(&self) -> &Self::Data;
 
-//     fn get_interval_list_mut(&mut self) -> &mut IntervalList<u8>;
+    fn get_manager(&self) -> &ManagerT;
 
-//     fn addititonal_function_before_request(&self);
+    fn get_manager_mut(&mut self) -> &mut ManagerT;
 
-//     fn send_request(&mut self, data_holder: Self::Data, bounds: (usize, usize)) {
-//         data_holder.request(bounds).unwrap();
+    fn extra_handle_response(
+        &mut self,
+        data: Vec<<Self::Data as DataHolder>::DataType>,
+        requested_bounds: (usize, usize),
+    ) {
+    }
 
-//         self.addititonal_function_before_request();
-//     }
+    fn process_request_data(&mut self, request_answer: Vec<Chunk<usize>>) {}
 
-//     fn handle_response(
-//         &mut self,
-//         data: Vec<<Self::Data as DataHolder>::DataType>,
-//         requested_bounds: (
-//             <Self::Data as DataHolder>::DataType,
-//             <Self::Data as DataHolder>::DataType,
-//         ),
-//     );
-// }
+    fn send_request(&mut self) {
+        let request_answer = if let Ok(_data) = self.get_manager().request() {
+            _data
+        } else {
+            println!("Finished");
+            return;
+        };
 
-struct TestManager {
-    server: Server,
-    mangaer: MOManager,
+        self.process_request_data(request_answer);
+    }
+
+    fn handle_response(
+        &mut self,
+        data: Vec<<Self::Data as DataHolder>::DataType>,
+        requested_bounds: (usize, usize),
+    ) {
+        self.get_manager_mut()
+            .receive(data.clone(), requested_bounds);
+
+        self.extra_handle_response(data, requested_bounds);
+    }
 }
 
-impl TestManager {
-    pub fn request_server(&mut self) {
+struct TestManagerWrapper<ManagerT: Manager> {
+    server: Server,
+    mangaer: ManagerT,
+}
+
+impl<ManagerT: Manager> ManagerWrapper<ManagerT> for TestManagerWrapper<ManagerT> {
+    type Data = Server;
+
+    fn get_data_holder(&self) -> &Self::Data {
+        &self.server
+    }
+
+    fn get_manager(&self) -> &ManagerT {
+        &self.mangaer
+    }
+
+    fn get_manager_mut(&mut self) -> &mut ManagerT {
+        &mut self.mangaer
+    }
+
+    fn process_request_data(&mut self, request_answer: Vec<Chunk<usize>>) {
+        request_answer.into_iter().for_each(|bounds| {
+            let data = self
+                .server
+                .get_data_from_range(bounds.clone().convert::<u8>().unwrap().into())
+                .unwrap();
+
+            self.handle_response(data.to_vec(), (bounds.begin, bounds.begin + data.len()));
+        });
+    }
+
+    fn extra_handle_response(
+        &mut self,
+        data: Vec<<Self::Data as DataHolder>::DataType>,
+        requested_bounds: (usize, usize),
+    ) {
+        self.send_request();
+    }
+}
+
+impl<ManagerT: Manager> TestManagerWrapper<ManagerT> {
+    pub fn _request_server(&mut self) {
         // get range
         let bounds = match self.mangaer.request() {
             Ok(bounds) => bounds,
@@ -52,19 +104,16 @@ impl TestManager {
         bounds.into_iter().for_each(|bounds| {
             let data = self
                 .server
-                .get_data_from_range(bounds.clone().into())
+                .get_data_from_range(bounds.clone().convert::<u8>().unwrap().into())
                 .unwrap();
 
-            self.handle_response(
-                data.to_vec(),
-                (bounds.begin, bounds.begin + data.len() as u8),
-            );
+            self._handle_response(data.to_vec(), (bounds.begin, bounds.begin + data.len()));
         });
     }
 
-    pub fn handle_response(&mut self, data: Vec<u8>, bounds: (u8, u8)) {
-        self.mangaer.receive(data, bounds);
-        self.request_server();
+    pub fn _handle_response(&mut self, data: Vec<u8>, bounds: (usize, usize)) {
+        self.mangaer.receive(data, (bounds.0, bounds.1));
+        self._request_server();
     }
 }
 
@@ -73,12 +122,12 @@ pub fn test_server() {
     for _ in 0..100 {
         let server = Server::init_with_lower_bound(50);
 
-        let mut tm = TestManager {
-            mangaer: MOManager::new(server.get_len() as usize),
+        let mut tm = TestManagerWrapper {
+            mangaer: BasicManager::new(server.get_len() as usize),
             server,
         };
 
-        tm.request_server();
+        tm.send_request();
 
         let dl = tm.server.get_len();
 
@@ -86,119 +135,13 @@ pub fn test_server() {
         println!("Server data: {:?}", tm.server.data);
         println!("Recieved data: {:?}", tm.mangaer.data);
 
-        assert_eq!(tm.server.data, tm.mangaer.data);
-    }
-}
-
-struct SmartMangaer {
-    filled_list: IntervalList<u8>,
-    data: Vec<u8>,
-}
-
-impl SmartMangaer {
-    fn new(data_len: usize) -> Self {
-        Self {
-            data: vec![0; data_len],
-            filled_list: IntervalList::new(),
-        }
-    }
-
-    fn ready(&self) -> bool {
-        if let Some(ref first_node) = self.filled_list.head {
-            if first_node.begin == 0 && first_node.end == self.data.len() as u8 {
-                return true;
-            }
-        }
-        false
-    }
-
-    fn request(&self) -> Result<Vec<Chunk<u8>>, MaganerError> {
-        if !self.ready() {
-            //suppose there can not be any gaps between chunks so the size of the list is always one
-
-            return Ok(if let Some(ref first_node) = self.filled_list.head {
-                //ask first_chunk.end..len
-                vec![Chunk::new(first_node.end, self.data.len() as u8).unwrap()]
-            } else {
-                //ask the first_chunk 0..len
-                vec![Chunk::new(0, self.data.len() as u8).unwrap()]
-            });
-        }
-
-        Err(MaganerError::TheDataIsFilled)
-    }
-
-    fn receive(&mut self, chunk: Vec<u8>, chunk_bounds: (u8, u8)) {
-        self.data[chunk_bounds.0 as usize..chunk_bounds.1 as usize]
-            .copy_from_slice(chunk.as_slice());
-        self.filled_list
-            .add_chunk(Chunk::new(chunk_bounds.0, chunk_bounds.1).unwrap())
-            .unwrap();
-    }
-}
-
-struct MOManager {
-    filled_list: IntervalList<u8>,
-    data: Vec<u8>,
-}
-
-#[derive(Debug)]
-enum MaganerError {
-    TheDataIsFilled,
-}
-
-impl std::fmt::Display for MaganerError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::TheDataIsFilled => write!(f, "the data is already filled"),
-            _ => unreachable!(),
-        }
-    }
-}
-
-/// the manager should be wait free, each time it receive any new data
-impl MOManager {
-    fn new(data_len: usize) -> Self {
-        Self {
-            data: vec![0; data_len],
-            filled_list: IntervalList::new(),
-        }
-    }
-
-    fn ready(&self) -> bool {
-        if let Some(ref first_node) = self.filled_list.head {
-            if first_node.begin == 0 && first_node.end == self.data.len() as u8 {
-                return true;
-            }
-        }
-        false
-    }
-
-    // request chunks based on current state of an interval list
-    fn request(&self) -> Result<Vec<Chunk<u8>>, MaganerError> {
-        //this one will be the simples and request just request chunks sequentially.
-
-        if !self.ready() {
-            //suppose there can not be any gaps between chunks so the size of the list is always one
-
-            return Ok(if let Some(ref first_node) = self.filled_list.head {
-                //ask first_chunk.end..len
-                vec![Chunk::new(first_node.end, self.data.len() as u8).unwrap()]
-            } else {
-                //ask the first_chunk 0..len
-                vec![Chunk::new(0, self.data.len() as u8).unwrap()]
-            });
-        }
-
-        Err(MaganerError::TheDataIsFilled)
-    }
-
-    // receive the chunk and modify the list
-    fn receive(&mut self, chunk: Vec<u8>, chunk_bounds: (u8, u8)) {
-        self.data[chunk_bounds.0 as usize..chunk_bounds.1 as usize]
-            .copy_from_slice(chunk.as_slice());
-        self.filled_list
-            .add_chunk(Chunk::new(chunk_bounds.0, chunk_bounds.1).unwrap())
-            .unwrap();
+        assert_eq!(
+            tm.server.data,
+            tm.mangaer
+                .data
+                .into_iter()
+                .map(|val| { val as u8 })
+                .collect::<Vec<u8>>()
+        );
     }
 }

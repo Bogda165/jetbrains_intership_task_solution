@@ -1,9 +1,9 @@
+use crate::Chunk;
 use core_crate::core::IntervalList;
 
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use core_crate::core::chunk::Chunk;
 
     #[test]
     fn test_empty_list() {
