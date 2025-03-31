@@ -1,7 +1,7 @@
-use crate::serealize::Serialize;
+use crate::serialize::Serialize;
 
 pub mod path {
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Path {
         pub path: String,
     }
@@ -52,13 +52,12 @@ pub mod message {
 }
 
 pub mod response {
-    use crate::serealize::Deserialize;
+    use crate::serialize::Deserialize;
 
     use super::*;
     use header::{HeaderName, HeaderValue};
     use message::HttpMessage;
-    use reqwest::header::HOST;
-    use std::collections::HashMap;
+    use std::{collections::HashMap, fmt::Display};
 
     #[derive(Debug)]
     pub struct HttpResponse {
@@ -67,6 +66,20 @@ pub mod response {
         pub result_string: String,
         pub headers: HashMap<HeaderName, HeaderValue>,
         pub body: Vec<u8>,
+    }
+
+    impl Display for HttpResponse {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(
+                f,
+                "{} {} {}\n Headers:\n {:?}\n data length: {}",
+                self.protocol,
+                self.result,
+                self.result_string,
+                self.headers,
+                self.body.len()
+            )
+        }
     }
 
     impl HttpResponse {
@@ -149,10 +162,11 @@ pub mod response {
                     .map_err(|err| "utf8 error while parsing(element 2)")?;
 
                     if !elements.next().is_none() {
-                        Err(format!(
-                            "to match arguments in {:?}",
-                            (protocol, result, result_string)
-                        ))
+                        // Err(format!(
+                        //     "to match arguments in {:?}",
+                        //     (protocol, result, result_string)
+                        // ))
+                        Ok((protocol, result, result_string))
                     } else {
                         Ok((protocol, result, result_string))
                     }
@@ -244,14 +258,14 @@ pub mod response {
 pub mod request {
     use std::collections::HashMap;
 
-    use crate::serealize::Serialize;
+    use crate::serialize::Serialize;
 
     use super::*;
     use header::{HeaderName, HeaderValue};
     use message::HttpMessage;
     use path::Path;
     use response::HttpResponse;
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub enum HttpRequestMethod {
         GET,
         POST,
@@ -259,7 +273,7 @@ pub mod request {
         // and the etc.
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct HttpRequest {
         pub method: HttpRequestMethod,
         pub request_target: Path,

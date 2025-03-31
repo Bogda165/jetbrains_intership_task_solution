@@ -14,6 +14,8 @@ trait ManagerWrapper<ManagerT: Manager> {
 
     fn get_data_holder(&self) -> &Self::Data;
 
+    fn get_data_holder_mut(&mut self) -> &mut Self::Data;
+
     fn get_manager(&self) -> &ManagerT;
 
     fn get_manager_mut(&mut self) -> &mut ManagerT;
@@ -34,6 +36,12 @@ trait ManagerWrapper<ManagerT: Manager> {
             println!("Finished");
             return;
         };
+
+        request_answer.iter().for_each(|chunk| {
+            self.get_data_holder_mut()
+                .request((chunk.begin, chunk.end))
+                .unwrap()
+        });
 
         self.process_request_data(request_answer);
     }
@@ -62,6 +70,10 @@ impl<ManagerT: Manager> ManagerWrapper<ManagerT> for TestManagerWrapper<ManagerT
         &self.server
     }
 
+    fn get_data_holder_mut(&mut self) -> &mut Self::Data {
+        &mut self.server
+    }
+
     fn get_manager(&self) -> &ManagerT {
         &self.mangaer
     }
@@ -71,14 +83,10 @@ impl<ManagerT: Manager> ManagerWrapper<ManagerT> for TestManagerWrapper<ManagerT
     }
 
     fn process_request_data(&mut self, request_answer: Vec<Chunk<usize>>) {
-        request_answer.into_iter().for_each(|bounds| {
-            let data = self
-                .server
-                .get_data_from_range(bounds.clone().convert::<u8>().unwrap().into())
-                .unwrap();
-
-            self.handle_response(data.to_vec(), (bounds.begin, bounds.begin + data.len()));
-        });
+        while let Some((data, (left_bound, _))) = self.get_data_holder_mut().get_response() {
+            let response_len = data.len();
+            self.handle_response(data, (left_bound, left_bound + response_len));
+        }
     }
 
     fn extra_handle_response(
@@ -87,33 +95,6 @@ impl<ManagerT: Manager> ManagerWrapper<ManagerT> for TestManagerWrapper<ManagerT
         requested_bounds: (usize, usize),
     ) {
         self.send_request();
-    }
-}
-
-impl<ManagerT: Manager> TestManagerWrapper<ManagerT> {
-    pub fn _request_server(&mut self) {
-        // get range
-        let bounds = match self.mangaer.request() {
-            Ok(bounds) => bounds,
-            Err(_) => {
-                println!("Finished");
-                vec![]
-            }
-        };
-
-        bounds.into_iter().for_each(|bounds| {
-            let data = self
-                .server
-                .get_data_from_range(bounds.clone().convert::<u8>().unwrap().into())
-                .unwrap();
-
-            self._handle_response(data.to_vec(), (bounds.begin, bounds.begin + data.len()));
-        });
-    }
-
-    pub fn _handle_response(&mut self, data: Vec<u8>, bounds: (usize, usize)) {
-        self.mangaer.receive(data, (bounds.0, bounds.1));
-        self._request_server();
     }
 }
 

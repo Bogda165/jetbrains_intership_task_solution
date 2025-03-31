@@ -1,56 +1,52 @@
-use sha2::{Digest, Sha256};
-use std::collections::HashMap;
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+use core::fmt;
+use std::{
+    error::Error,
+    fmt::Display,
+    io::{Read, Write},
     net::TcpStream,
-    time::Duration,
-    time::sleep,
+    sync::mpsc::{RecvError, SendError, channel},
 };
 
-pub mod http_messages;
-pub mod serealize;
 pub mod simple_solution;
 
-use serealize::{Deserialize, Serialize};
+use std::sync::mpsc::{Receiver, Sender};
 
-use http_messages::{
-    message::HttpMessage,
+use http_message::http_messages::{
+    header::HeaderName,
     path::Path,
     request::{HttpRequest, HttpRequestMethod},
     response::HttpResponse,
 };
 
+use server_communicator::{ServerCommunicator, ServerCommunicatorError};
+
 static SERVER_ADDR: &str = "127.0.0.1:8080";
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut request = HttpRequest::new(HttpRequestMethod::GET, Path::default(), "HTTP/1.1");
 
     request.add_header("Host", "127.0.0.1:8080");
     request.add_header("User-Agent", "Rust-Client/1.0");
     request.add_header("Connection", "close");
+    request.add_header("Ragnge", "bytes=1-1000");
 
-    let request_bytes = request.serialize();
+    let (communicator, (receiver, sender)) = ServerCommunicator::new("127.0.0.1:8080").unwrap();
+    communicator.start();
 
-    let mut stream = TcpStream::connect(SERVER_ADDR).await?;
+    std::thread::scope(|f| {
+        f.spawn(move || {
+            for _ in 0..10 {
+                let response = receiver.recv().unwrap();
 
-    stream.write_all(&request_bytes).await?;
-    println!("Request sent");
+                println!("{}", response);
+            }
+        });
 
-    let mut buffer = Vec::new();
-    let bytes_read = stream.read_to_end(&mut buffer).await?;
-
-    if bytes_read > 0 {
-        println!("Received {} bytes", bytes_read);
-
-        let response = HttpResponse::desrialize(buffer[..bytes_read].to_vec())?;
-
-        //println!("{:?}", response);
-
-        println!("body length: {}", response.body.len());
-    } else {
-        println!("No data received");
-    }
+        for _ in 0..10 {
+            sender.send(request.clone()).unwrap();
+        }
+        println!("all requests have been sent");
+    });
 
     Ok(())
 }

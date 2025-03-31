@@ -45,7 +45,8 @@ pub trait DataHolder {
     type DataType;
     type DataContainer: IntoIterator<Item = Self::DataType>;
     type E: Error;
-    fn request(&self, bounds: (usize, usize)) -> Result<Self::DataContainer, Self::E>;
+    fn request(&mut self, bounds: (usize, usize)) -> Result<(), Self::E>;
+    fn get_response(&mut self) -> Option<(Self::DataContainer, (usize, usize))>;
     fn get_data_len(&self) -> usize;
 }
 
@@ -54,9 +55,18 @@ impl DataHolder for Server {
     type DataContainer = Vec<u8>;
     type E = ServerError;
 
-    fn request(&self, bounds: (usize, usize)) -> Result<Vec<u8>, ServerError> {
-        self.get_data_from_range((bounds.0 as u8, bounds.1 as u8))
-            .map(Vec::<u8>::from)
+    fn request(&mut self, bounds: (usize, usize)) -> Result<(), ServerError> {
+        let response = self
+            .get_data_from_range((bounds.0 as u8, bounds.1 as u8))
+            .map(Vec::<u8>::from)?;
+
+        self.records.push((response, (bounds.0, bounds.1)));
+
+        Ok(())
+    }
+
+    fn get_response(&mut self) -> Option<(Self::DataContainer, (usize, usize))> {
+        self.records.pop()
     }
 
     fn get_data_len(&self) -> usize {
@@ -66,6 +76,7 @@ impl DataHolder for Server {
 
 pub struct Server {
     pub data: Vec<u8>,
+    pub records: Vec<(Vec<u8>, (usize, usize))>,
 }
 
 impl Server {
@@ -77,7 +88,10 @@ impl Server {
         let mut raw_data = vec![0_u8; len_fn() as usize];
         OsRng.try_fill_bytes(raw_data.as_mut_slice()).unwrap();
 
-        Self { data: raw_data }
+        Self {
+            data: raw_data,
+            records: vec![],
+        }
     }
 
     pub(crate) fn init_with_lower_bound(lb: u8) -> Self {
