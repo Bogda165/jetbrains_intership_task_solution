@@ -5,14 +5,14 @@ use errors::ChunkError;
 pub mod errors {
     use crate::core::*;
     #[derive(Debug, PartialEq, Eq)]
-    pub enum ChunkError<T: Clone + std::fmt::Debug + PartialOrd + Ord> {
+    pub enum ChunkError<T: ChunkType> {
         InvalidChunk(Chunk<T>),
         ChunksOverlaps(Chunk<T>, Chunk<T>),
         ChunksDoNotOverlaps(Chunk<T>, Chunk<T>),
         IncorrectChunksOrder(Chunk<T>, Chunk<T>),
     }
 
-    impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> std::fmt::Display for ChunkError<T> {
+    impl<T: ChunkType> std::fmt::Display for ChunkError<T> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
                 ChunkError::InvalidChunk(chunk) => {
@@ -37,11 +37,11 @@ pub mod errors {
     }
 }
 
-pub struct IntervalList<T: Clone + std::fmt::Debug + PartialOrd + Ord> {
+pub struct IntervalList<T: ChunkType> {
     pub head: Option<Box<ChunkNode<T>>>,
 }
 
-impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> IntervalList<T> {
+impl<T: ChunkType> IntervalList<T> {
     pub fn new() -> Self {
         Self { head: None }
     }
@@ -233,11 +233,11 @@ impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> IntervalList<T> {
     }
 }
 
-pub struct IntervalIterator<'a, T: Clone + std::fmt::Debug + PartialOrd + Ord> {
+pub struct IntervalIterator<'a, T: ChunkType> {
     current: Option<&'a ChunkNode<T>>,
 }
 
-impl<'a, T: Clone + std::fmt::Debug + PartialOrd + Ord> Iterator for IntervalIterator<'a, T> {
+impl<'a, T: ChunkType> Iterator for IntervalIterator<'a, T> {
     type Item = &'a Chunk<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -251,7 +251,7 @@ impl<'a, T: Clone + std::fmt::Debug + PartialOrd + Ord> Iterator for IntervalIte
     }
 }
 
-impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> std::fmt::Display for IntervalList<T> {
+impl<T: ChunkType> std::fmt::Display for IntervalList<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "IntervalList[")?;
         let mut first = true;

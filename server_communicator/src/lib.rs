@@ -3,23 +3,44 @@ use http_message::{
     serialize::*,
 };
 use std::{
+    error::Error,
     fmt::Display,
     io::{Read, Write},
     net::TcpStream,
-    sync::mpsc::{Receiver, RecvError, SendError, Sender, channel},
+    sync::mpsc::{Receiver, RecvError, RecvTimeoutError, SendError, Sender, channel},
 };
 
 /// Abstraction for communication with server. When the server will be updated to later http version, or will allow connection keep alive header. The Comunicator need to be improved.
+///
+/// Custom Http header X-Force-Terminate will imediately terminate the connector workflow
 pub struct ServerCommunicator {
     requests: Receiver<HttpRequest>,
     respons: Sender<HttpResponse>,
 }
 
+#[derive(Debug)]
 pub enum ServerCommunicatorError {
     NoHostNameinTheHeader,
     TcpError(std::io::Error),
     SerializeError(String),
     ChannelError(String),
+    TimeOutError(String),
+    Terminate,
+}
+
+impl Error for ServerCommunicatorError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        //TODO
+        None
+    }
+
+    fn description(&self) -> &str {
+        "description() is deprecated; use Display"
+    }
+
+    fn cause(&self) -> Option<&dyn Error> {
+        self.source()
+    }
 }
 
 impl From<std::io::Error> for ServerCommunicatorError {
@@ -40,6 +61,12 @@ impl From<RecvError> for ServerCommunicatorError {
     }
 }
 
+impl From<RecvTimeoutError> for ServerCommunicatorError {
+    fn from(value: RecvTimeoutError) -> Self {
+        Self::TimeOutError(format!("{}", value))
+    }
+}
+
 impl std::fmt::Display for ServerCommunicatorError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -51,7 +78,8 @@ impl std::fmt::Display for ServerCommunicatorError {
             ),
             Self::SerializeError(msg) => write!(f, "Serialize error with message: {}", msg),
             Self::ChannelError(msg) => write!(f, "Channler error {}", msg),
-
+            Self::Terminate => write!(f, "The communicator was terminated"),
+            Self::TimeOutError(msg) => write!(f, "Timeout in {}", msg),
             _ => unreachable!(),
         }
     }
@@ -75,11 +103,14 @@ impl ServerCommunicator {
     }
 
     fn workflow(&mut self, request: HttpRequest) -> Result<(), ServerCommunicatorError> {
+        // check for terminating flag
+        if request.headers.get(&"X-Force-Terminate".into()).is_some() {
+            return Err(ServerCommunicatorError::Terminate);
+        }
+
         let addr = &request
             .headers
-            .get(&HeaderName {
-                name: "Host".to_string(),
-            })
+            .get(&"Host".into())
             .ok_or_else(|| ServerCommunicatorError::NoHostNameinTheHeader)?
             .value;
 
@@ -112,9 +143,18 @@ impl ServerCommunicator {
             while let Ok(request) = self.requests.recv() {
                 match self.workflow(request) {
                     Ok(_) => println!("The value was send through the channel"),
-                    Err(err) => eprintln!("{}", err),
+                    Err(err) => match err {
+                        ServerCommunicatorError::Terminate => {
+                            eprintln!("Terminatin message was received, droping channels");
+                            break;
+                        }
+                        _ => eprintln!("Error: {}", err),
+                    },
                 }
             }
+            //unnsessesary drops, but I still like to have them there)
+            drop(self.respons);
+            drop(self.requests);
         });
     }
 }

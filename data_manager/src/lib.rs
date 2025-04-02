@@ -9,7 +9,7 @@ pub mod manager;
 pub mod server_simulator;
 
 // I could played more with generics of DataType but I decided to hard-code it due to potential errors in types converstaions
-trait ManagerWrapper<ManagerT: Manager> {
+pub trait ManagerWrapper<ManagerT: Manager> {
     type Data: DataHolder<DataType = u8>;
 
     fn get_data_holder(&self) -> &Self::Data;
@@ -27,7 +27,7 @@ trait ManagerWrapper<ManagerT: Manager> {
     ) {
     }
 
-    fn process_request_data(&mut self, request_answer: Vec<Chunk<usize>>) {}
+    fn process_request_chunks(&mut self, request_answer: Vec<Chunk<usize>>) {}
 
     fn send_request(&mut self) {
         let request_answer = if let Ok(_data) = self.get_manager().request() {
@@ -43,7 +43,7 @@ trait ManagerWrapper<ManagerT: Manager> {
                 .unwrap()
         });
 
-        self.process_request_data(request_answer);
+        self.process_request_chunks(request_answer);
     }
 
     fn handle_response(
@@ -82,8 +82,10 @@ impl<ManagerT: Manager> ManagerWrapper<ManagerT> for TestManagerWrapper<ManagerT
         &mut self.mangaer
     }
 
-    fn process_request_data(&mut self, request_answer: Vec<Chunk<usize>>) {
-        while let Some((data, (left_bound, _))) = self.get_data_holder_mut().get_response() {
+    fn process_request_chunks(&mut self, request_answer: Vec<Chunk<usize>>) {
+        // in context of sever get_response can never return an error
+        while let Some((data, (left_bound, _))) = self.get_data_holder_mut().get_response().unwrap()
+        {
             let response_len = data.len();
             self.handle_response(data, (left_bound, left_bound + response_len));
         }
@@ -119,9 +121,9 @@ pub fn test_server() {
         assert_eq!(
             tm.server.data,
             tm.mangaer
-                .data
+                .get_data()
                 .into_iter()
-                .map(|val| { val as u8 })
+                .map(|val| { *val })
                 .collect::<Vec<u8>>()
         );
     }

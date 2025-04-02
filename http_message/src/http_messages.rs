@@ -34,9 +34,37 @@ pub mod header {
         pub name: String,
     }
 
+    impl From<String> for HeaderName {
+        fn from(value: String) -> Self {
+            Self { name: value }
+        }
+    }
+
+    impl<'a> From<&'a str> for HeaderName {
+        fn from(value: &'a str) -> Self {
+            Self {
+                name: value.to_string(),
+            }
+        }
+    }
+
     #[derive(PartialEq, Eq, Hash, Clone, Debug)]
     pub struct HeaderValue {
         pub value: String,
+    }
+
+    impl From<String> for HeaderValue {
+        fn from(value: String) -> Self {
+            Self { value }
+        }
+    }
+
+    impl<'a> From<&'a str> for HeaderValue {
+        fn from(value: &'a str) -> Self {
+            Self {
+                value: value.to_string(),
+            }
+        }
     }
 }
 

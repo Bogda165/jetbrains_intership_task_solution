@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 use crate::core::errors::ChunkError;
 
 #[derive(Clone, Debug)]
@@ -14,20 +16,64 @@ pub enum OverlapType {
     Inside,
 }
 
+pub trait Next {
+    fn next(self) -> Self;
+}
+
+impl Next for usize {
+    fn next(self) -> Self {
+        self.add(1)
+    }
+}
+
+impl Next for u32 {
+    fn next(self) -> Self {
+        self.add(1)
+    }
+}
+
+impl Next for i32 {
+    fn next(self) -> Self {
+        self.add(1)
+    }
+}
+
+pub trait ChunkType:
+    Clone
+    + std::fmt::Debug
+    + PartialOrd
+    + Ord
+    + std::ops::Add<Output = Self>
+    + std::ops::Sub<Output = Self>
+    + Next
+{
+}
+
+impl<T> ChunkType for T where
+    T: Clone
+        + std::fmt::Debug
+        + PartialOrd
+        + Ord
+        + std::ops::Add<Output = Self>
+        + std::ops::Sub<Output = Self>
+        + Next
+{
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Chunk<T: Clone + std::fmt::Debug + PartialOrd + Ord> {
+pub struct Chunk<T: ChunkType> {
     pub begin: T,
     pub end: T,
 }
 
 //TODO delete
-impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> Into<(T, T)> for Chunk<T> {
+impl<T: ChunkType> Into<(T, T)> for Chunk<T> {
     fn into(self) -> (T, T) {
         (self.begin, self.end)
     }
 }
 
-impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> TryFrom<(T, T)> for Chunk<T> {
+impl<T: ChunkType> TryFrom<(T, T)> for Chunk<T> {
     type Error = ChunkError<T>;
 
     fn try_from(value: (T, T)) -> Result<Self, Self::Error> {
@@ -35,13 +81,13 @@ impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> TryFrom<(T, T)> for Chunk<T>
     }
 }
 
-impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> std::fmt::Display for Chunk<T> {
+impl<T: ChunkType> std::fmt::Display for Chunk<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "[{:?} -> {:?}]", self.begin, self.end)
     }
 }
 
-impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> Chunk<T> {
+impl<T: ChunkType> Chunk<T> {
     pub fn new(begin: T, end: T) -> Result<Self, ChunkError<T>> {
         if begin >= end {
             return Err(ChunkError::InvalidChunk(Chunk { begin, end }));
@@ -64,7 +110,7 @@ impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> Chunk<T> {
             return Overlaps::Overlaps;
         }
 
-        if chunk1.end == chunk2.begin || chunk1.begin == chunk2.end {
+        if chunk1.end == (chunk2.begin) || (chunk1.begin == chunk2.end) {
             return Overlaps::CanBeOptimized;
         }
 
@@ -95,9 +141,7 @@ impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> Chunk<T> {
         }
     }
 
-    pub fn convert<U: Clone + std::fmt::Debug + PartialOrd + Ord + TryFrom<T>>(
-        self,
-    ) -> Result<Chunk<U>, U::Error> {
+    pub fn convert<U: ChunkType + TryFrom<T>>(self) -> Result<Chunk<U>, U::Error> {
         Ok(Chunk::<U> {
             begin: self.begin.try_into()?,
             end: self.end.try_into()?,
@@ -107,8 +151,7 @@ impl<T: Clone + std::fmt::Debug + PartialOrd + Ord> Chunk<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::core::chunk::{Chunk, Overlaps};
-    use crate::core::errors::ChunkError;
+    use super::*;
 
     #[test]
     fn test_chunk_creation() {

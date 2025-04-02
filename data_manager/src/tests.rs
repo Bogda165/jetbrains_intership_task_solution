@@ -25,6 +25,15 @@ pub mod tests {
     }
 
     #[test]
+    fn test_near() {
+        let mut list = IntervalList::<usize>::new();
+        list.add_chunk(Chunk::new(0, 10).unwrap());
+        list.add_chunk(Chunk::new(11, 20).unwrap());
+
+        assert_eq!(list.len(), 1);
+    }
+
+    #[test]
     fn test_add_non_overlapping_chunks() {
         let mut list = IntervalList::new();
 

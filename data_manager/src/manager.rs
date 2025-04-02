@@ -127,6 +127,8 @@ pub mod basic_manager {
             if !self.ready() {
                 //suppose there can not be any gaps between chunks so the size of the list is always one
 
+                assert!(self.filled_list.len() == 1 || self.filled_list.len() == 0);
+
                 return Ok(if let Some(ref first_node) = self.filled_list.head {
                     //ask first_chunk.end..len
                     vec![Chunk::new(first_node.end, self.data.len()).unwrap()]
@@ -140,6 +142,7 @@ pub mod basic_manager {
         }
 
         fn receive(&mut self, chunk: Vec<u8>, chunk_bounds: (usize, usize)) {
+            println!("chunk_bounds: {}-{}", chunk_bounds.0, chunk_bounds.1);
             self.data[chunk_bounds.0 as usize..chunk_bounds.1 as usize]
                 .copy_from_slice(chunk.as_slice());
             self.filled_list

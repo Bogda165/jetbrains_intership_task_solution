@@ -46,7 +46,7 @@ pub trait DataHolder {
     type DataContainer: IntoIterator<Item = Self::DataType>;
     type E: Error;
     fn request(&mut self, bounds: (usize, usize)) -> Result<(), Self::E>;
-    fn get_response(&mut self) -> Option<(Self::DataContainer, (usize, usize))>;
+    fn get_response(&mut self) -> Result<Option<(Self::DataContainer, (usize, usize))>, Self::E>;
     fn get_data_len(&self) -> usize;
 }
 
@@ -65,8 +65,8 @@ impl DataHolder for Server {
         Ok(())
     }
 
-    fn get_response(&mut self) -> Option<(Self::DataContainer, (usize, usize))> {
-        self.records.pop()
+    fn get_response(&mut self) -> Result<Option<(Self::DataContainer, (usize, usize))>, Self::E> {
+        Ok(self.records.pop())
     }
 
     fn get_data_len(&self) -> usize {
