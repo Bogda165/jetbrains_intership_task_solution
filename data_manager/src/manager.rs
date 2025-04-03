@@ -162,3 +162,72 @@ pub mod basic_manager {
         }
     }
 }
+
+// pub mod random_manager {
+
+//     use super::*;
+
+//     pub struct RandomManager {
+//         pub filled_list: IntervalList<usize>,
+//         pub data: Vec<u8>,
+//     }
+
+//     /// the manager should be wait free, each time it receive any new data
+//     impl BasicManager {
+//         pub fn new(data_len: usize) -> Self {
+//             Self {
+//                 data: vec![0; data_len],
+//                 filled_list: IntervalList::new(),
+//             }
+//         }
+//     }
+
+//     impl Manager for BasicManager {
+//         fn get_filled_list(&self) -> &IntervalList<usize> {
+//             &self.filled_list
+//         }
+
+//         fn get_data(&self) -> &Vec<u8> {
+//             &self.data
+//         }
+
+//         fn request(&self) -> Result<Vec<Chunk<usize>>, ManagerError> {
+//             //this one will be the simples and request just request chunks sequentially.
+
+//             if !self.ready() {
+//                 //suppose there can not be any gaps between chunks so the size of the list is always one
+
+//                 assert!(self.filled_list.len() == 1 || self.filled_list.len() == 0);
+
+//                 return Ok(if let Some(ref first_node) = self.filled_list.head {
+//                     //ask first_chunk.end..len
+//                     vec![Chunk::new(first_node.end, self.data.len()).unwrap()]
+//                 } else {
+//                     //ask the first_chunk 0..len
+//                     vec![Chunk::new(0, self.data.len()).unwrap()]
+//                 });
+//             }
+
+//             Err(ManagerError::TheDataIsFilled)
+//         }
+
+//         fn receive(
+//             &mut self,
+//             chunk: Vec<u8>,
+//             chunk_bounds: (usize, usize),
+//         ) -> Result<(), ManagerError> {
+//             println!("chunk_bounds: {}-{}", chunk_bounds.0, chunk_bounds.1);
+//             self.data[chunk_bounds.0 as usize..chunk_bounds.1 as usize]
+//                 .copy_from_slice(chunk.as_slice());
+//             self.filled_list
+//                 .add_chunk(Chunk::new(chunk_bounds.0, chunk_bounds.1).unwrap())
+//                 .unwrap();
+
+//             if chunk_bounds.1 == self.data.len() {
+//                 Err(ManagerError::TheDataIsFilled)
+//             } else {
+//                 Ok(())
+//             }
+//         }
+//     }
+// }

@@ -229,7 +229,7 @@ fn test_prod() {
     sc.start();
     let client = Client::new(s, r).unwrap();
     let data_len = client.data_len;
-    let mut bm = BasicManagerWrapper {
+    let bm = BasicManagerWrapper {
         server: client,
         manager: BasicManager::new(data_len),
     };

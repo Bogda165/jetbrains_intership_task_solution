@@ -41,6 +41,15 @@ pub struct IntervalList<T: ChunkType> {
     pub head: Option<Box<ChunkNode<T>>>,
 }
 
+impl<T: ChunkType> PartialEq for IntervalList<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.iter()
+            .zip(other.iter())
+            .try_for_each(|(chunk1, chunk2)| if chunk1 == chunk2 { Ok(()) } else { Err(()) })
+            .is_ok()
+    }
+}
+
 impl<T: ChunkType> IntervalList<T> {
     pub fn new() -> Self {
         Self { head: None }
@@ -231,6 +240,45 @@ impl<T: ChunkType> IntervalList<T> {
         }
         None
     }
+
+    pub fn from_intervals(intervals: Vec<Chunk<T>>) -> Result<Self, ChunkError<T>> {
+        let mut list = Self::new();
+
+        intervals
+            .into_iter()
+            .try_for_each(|chunk| list.add_chunk(chunk))?;
+
+        Ok(list)
+    }
+
+    pub fn get_complement_intervals(
+        &self,
+        start_to_end_chunk: Chunk<T>,
+    ) -> Result<Self, ChunkError<T>> {
+        let mut last_chunk_end = start_to_end_chunk.begin;
+
+        let mut list = IntervalList::new();
+        let mut node = &self.head;
+
+        while let Some(current) = node {
+            if current.begin > start_to_end_chunk.end {
+                last_chunk_end = start_to_end_chunk.end.clone();
+                break;
+            }
+            if let Ok(chunk) = Chunk::new(last_chunk_end.clone(), current.begin.clone()) {
+                list.add_chunk(chunk)?;
+            };
+
+            last_chunk_end = current.end.clone().next();
+            node = &current.next_chunk;
+        }
+
+        if last_chunk_end < start_to_end_chunk.end {
+            list.add_chunk(Chunk::new(last_chunk_end, start_to_end_chunk.end)?)?;
+        }
+
+        Ok(list)
+    }
 }
 
 pub struct IntervalIterator<'a, T: ChunkType> {
@@ -263,5 +311,24 @@ impl<T: ChunkType> std::fmt::Display for IntervalList<T> {
             first = false;
         }
         write!(f, "]")
+    }
+}
+
+impl<T: ChunkType> std::fmt::Debug for IntervalList<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "IntervalList{{ ")?;
+        let mut first = true;
+        for chunk in self.iter() {
+            if !first {
+                write!(f, ", ")?;
+            }
+            write!(
+                f,
+                "Interval {{start: {:?}, end: {:?} }}",
+                chunk.begin, chunk.end
+            )?;
+            first = false;
+        }
+        write!(f, "}}")
     }
 }

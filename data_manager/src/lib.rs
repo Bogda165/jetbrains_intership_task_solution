@@ -4,8 +4,6 @@ use manager::errors::ManagerError;
 use manager::{Manager, basic_manager::BasicManager};
 use server_simulator::{DataHolder, Server};
 
-mod tests;
-
 pub mod manager;
 
 pub mod server_simulator;

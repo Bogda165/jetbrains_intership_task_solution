@@ -38,6 +38,12 @@ impl Next for i32 {
     }
 }
 
+impl Next for u8 {
+    fn next(self) -> Self {
+        self.add(1)
+    }
+}
+
 pub trait ChunkType:
     Clone
     + std::fmt::Debug
