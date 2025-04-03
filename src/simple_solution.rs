@@ -1,10 +1,13 @@
 use std::io::Write;
 use std::net::TcpStream;
+use std::path::Display;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread::Thread;
 
+use data_manager::errors::ManagerWrapperError;
 use data_manager::manager::Manager;
 use data_manager::manager::basic_manager::BasicManager;
+use data_manager::manager::errors::ManagerError;
 use data_manager::server_simulator::{DataHolder, ServerError};
 
 use data_manager::ManagerWrapper;
@@ -83,12 +86,52 @@ impl Client {
     }
 }
 
+use data_manager::server_simulator::DataHolderError;
+use sha2::Digest;
+
+#[derive(Debug)]
+pub enum ClientError {
+    ServerError(ServerCommunicatorError),
+}
+
+impl From<ServerCommunicatorError> for ClientError {
+    fn from(value: ServerCommunicatorError) -> Self {
+        Self::ServerError(value)
+    }
+}
+
+impl std::fmt::Display for ClientError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ClientError::ServerError(server_communicator_error) => {
+                write!(f, "{}", server_communicator_error)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ClientError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        None
+    }
+
+    fn description(&self) -> &str {
+        "description() is deprecated; use Display"
+    }
+
+    fn cause(&self) -> Option<&dyn std::error::Error> {
+        self.source()
+    }
+}
+
+impl DataHolderError for ClientError {}
+
 impl DataHolder for Client {
     type DataType = u8;
 
     type DataContainer = Vec<u8>;
 
-    type E = ServerCommunicatorError;
+    type E = ClientError;
 
     fn request(&mut self, bounds: (usize, usize)) -> Result<(), Self::E> {
         #[cfg(test)]
@@ -101,7 +144,9 @@ impl DataHolder for Client {
 
         request.add_header("Range", &format!("bytes={}-{}", bounds.0, bounds.1));
 
-        self.sender.send(request).map_err(|err| err.into())
+        self.sender
+            .send(request)
+            .map_err(|err| Into::<ServerCommunicatorError>::into(err).into())
     }
 
     fn get_response(&mut self) -> Result<Option<(Self::DataContainer, (usize, usize))>, Self::E> {
@@ -117,6 +162,7 @@ impl DataHolder for Client {
             self.last_chunk_start_point + results.1,
         );
         self.last_chunk_start_point += results.1;
+
         Ok(Some((results.0, bounds)))
     }
 
@@ -130,14 +176,7 @@ struct BasicManagerWrapper<ManagerT: Manager> {
     manager: ManagerT,
 }
 
-impl<M: Manager> BasicManagerWrapper<M> {
-    pub fn start(mut self) {
-        self.send_request();
-        while let Some(resp) = self.server.get_response().unwrap() {
-            self.handle_response(resp.0, resp.1);
-        }
-    }
-}
+impl<M: Manager> BasicManagerWrapper<M> {}
 
 impl<ManagerT: Manager> ManagerWrapper<ManagerT> for BasicManagerWrapper<ManagerT> {
     type Data = Client;
@@ -163,7 +202,24 @@ impl<ManagerT: Manager> ManagerWrapper<ManagerT> for BasicManagerWrapper<Manager
         data: Vec<<Self::Data as DataHolder>::DataType>,
         requested_bounds: (usize, usize),
     ) {
-        self.send_request()
+        self.send_request().unwrap()
+    }
+
+    fn start(mut self) -> Result<(), ManagerWrapperError<ManagerT, Self>> {
+        self.send_request()?;
+        let res = || -> Result<(), ManagerWrapperError<ManagerT, Self>> {
+            while let Some(resp) = self.server.get_response()? {
+                self.handle_response(resp.0, resp.1)?;
+            }
+            Ok(())
+        }();
+
+        if let Err(ManagerWrapperError::ManagerError(ManagerError::TheDataIsFilled)) = res {
+            println!("Finished");
+            Ok(())
+        } else {
+            res
+        }
     }
 }
 
@@ -178,5 +234,5 @@ fn test_prod() {
         manager: BasicManager::new(data_len),
     };
 
-    bm.start();
+    bm.start().unwrap();
 }

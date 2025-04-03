@@ -1,5 +1,5 @@
 use core_crate::chunk::Chunk;
-use errors::MaganerError;
+use errors::ManagerError;
 
 use crate::IntervalList;
 
@@ -18,9 +18,10 @@ pub trait Manager {
     }
 
     /// request chunks based on current state of an interval list
-    fn request(&self) -> Result<Vec<Chunk<usize>>, MaganerError>;
+    fn request(&self) -> Result<Vec<Chunk<usize>>, ManagerError>;
 
-    fn receive(&mut self, chunk: Vec<u8>, chunk_bounds: (usize, usize));
+    fn receive(&mut self, chunk: Vec<u8>, chunk_bounds: (usize, usize))
+    -> Result<(), ManagerError>;
 }
 
 pub mod smart_manager {
@@ -79,11 +80,11 @@ pub mod smart_manager {
 pub mod errors {
 
     #[derive(Debug)]
-    pub enum MaganerError {
+    pub enum ManagerError {
         TheDataIsFilled,
     }
 
-    impl std::fmt::Display for MaganerError {
+    impl std::fmt::Display for ManagerError {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
                 Self::TheDataIsFilled => write!(f, "the data is already filled"),
@@ -121,7 +122,7 @@ pub mod basic_manager {
             &self.data
         }
 
-        fn request(&self) -> Result<Vec<Chunk<usize>>, MaganerError> {
+        fn request(&self) -> Result<Vec<Chunk<usize>>, ManagerError> {
             //this one will be the simples and request just request chunks sequentially.
 
             if !self.ready() {
@@ -138,16 +139,26 @@ pub mod basic_manager {
                 });
             }
 
-            Err(MaganerError::TheDataIsFilled)
+            Err(ManagerError::TheDataIsFilled)
         }
 
-        fn receive(&mut self, chunk: Vec<u8>, chunk_bounds: (usize, usize)) {
+        fn receive(
+            &mut self,
+            chunk: Vec<u8>,
+            chunk_bounds: (usize, usize),
+        ) -> Result<(), ManagerError> {
             println!("chunk_bounds: {}-{}", chunk_bounds.0, chunk_bounds.1);
             self.data[chunk_bounds.0 as usize..chunk_bounds.1 as usize]
                 .copy_from_slice(chunk.as_slice());
             self.filled_list
                 .add_chunk(Chunk::new(chunk_bounds.0, chunk_bounds.1).unwrap())
                 .unwrap();
+
+            if chunk_bounds.1 == self.data.len() {
+                Err(ManagerError::TheDataIsFilled)
+            } else {
+                Ok(())
+            }
         }
     }
 }
