@@ -79,6 +79,7 @@ impl DataHolder for Server {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Server {
     pub data: Vec<u8>,
     pub records: Vec<(Vec<u8>, (usize, usize))>,

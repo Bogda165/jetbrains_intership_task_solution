@@ -144,6 +144,8 @@ impl DataHolder for Client {
 
         request.add_header("Range", &format!("bytes={}-{}", bounds.0, bounds.1));
 
+        self.last_chunk_start_point = bounds.0;
+
         self.sender
             .send(request)
             .map_err(|err| Into::<ServerCommunicatorError>::into(err).into())
@@ -205,34 +207,79 @@ impl<ManagerT: Manager> ManagerWrapper<ManagerT> for BasicManagerWrapper<Manager
         self.send_request().unwrap()
     }
 
-    fn start(mut self) -> Result<(), ManagerWrapperError<ManagerT, Self>> {
+    fn start(mut self) -> Result<Vec<u8>, ManagerWrapperError<ManagerT, Self>> {
         self.send_request()?;
-        let res = || -> Result<(), ManagerWrapperError<ManagerT, Self>> {
+        let res = || -> Result<Vec<u8>, ManagerWrapperError<ManagerT, Self>> {
             while let Some(resp) = self.server.get_response()? {
                 self.handle_response(resp.0, resp.1)?;
             }
-            Ok(())
+            unreachable!()
+            //Ok(self.manager.move_data())
         }();
 
         if let Err(ManagerWrapperError::ManagerError(ManagerError::TheDataIsFilled)) = res {
             println!("Finished");
-            Ok(())
+            Ok(self.manager.move_data())
         } else {
             res
         }
     }
 }
 
-#[test]
-fn test_prod() {
-    let (sc, (r, s)) = ServerCommunicator::new("127.0.0.1:8080").unwrap();
-    sc.start();
-    let client = Client::new(s, r).unwrap();
-    let data_len = client.data_len;
-    let bm = BasicManagerWrapper {
-        server: client,
-        manager: BasicManager::new(data_len),
-    };
+#[cfg(test)]
+mod tests {
+    use data_manager::manager::random_manager::RandomManager;
+    use hex;
+    use sha2::Sha256;
 
-    bm.start().unwrap();
+    use super::*;
+
+    #[test]
+    fn test_prod() {
+        let (sc, (r, s)) = ServerCommunicator::new("127.0.0.1:8080").unwrap();
+        sc.start();
+        let client = Client::new(s, r).unwrap();
+        let data_len = client.data_len;
+        let bm = BasicManagerWrapper {
+            server: client,
+            manager: BasicManager::new(data_len),
+        };
+
+        let res = bm.start().unwrap();
+
+        let mut hasher = Sha256::new();
+        hasher.update(&res);
+
+        let res = hasher.finalize();
+
+        let res = hex::encode(res);
+
+        println!("{}", res);
+    }
+
+    const MIN_SERVER: usize = 64 * 1024;
+    //488852-554388
+    #[test]
+    fn test_rand_manager_with_server() {
+        let (sc, (r, s)) = ServerCommunicator::new("127.0.0.1:8080").unwrap();
+        sc.start();
+        let client = Client::new(s, r).unwrap();
+        let data_len = client.data_len;
+
+        let bm = BasicManagerWrapper {
+            server: client,
+            manager: RandomManager::<MIN_SERVER>::new(data_len),
+        };
+
+        let res = bm.start().unwrap();
+
+        let mut hasher = Sha256::new();
+        hasher.update(&res);
+
+        let res = hasher.finalize();
+
+        let res = hex::encode(res);
+
+        println!("{}", res);
+    }
 }

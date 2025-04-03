@@ -1,6 +1,7 @@
 use core_crate::{chunk::Chunk, core::IntervalList};
 use errors::ManagerWrapperError;
 use manager::errors::ManagerError;
+use manager::random_manager::RandomManager;
 use manager::{Manager, basic_manager::BasicManager};
 use server_simulator::{DataHolder, Server};
 
@@ -104,7 +105,9 @@ pub trait ManagerWrapper<ManagerT: Manager> {
         Ok(())
     }
 
-    fn start(self) -> Result<(), ManagerWrapperError<ManagerT, Self>>
+    fn start(
+        self,
+    ) -> Result<<Self::Data as DataHolder>::DataContainer, ManagerWrapperError<ManagerT, Self>>
     where
         Self: Sized;
 }
@@ -138,7 +141,12 @@ impl<ManagerT: Manager> ManagerWrapper<ManagerT> for TestManagerWrapper<ManagerT
         while let Some((data, (left_bound, _))) = self.get_data_holder_mut().get_response().unwrap()
         {
             let response_len = data.len();
-            self.handle_response(data, (left_bound, left_bound + response_len));
+            if let Err(ManagerWrapperError::ManagerError(ManagerError::TheDataIsFilled)) =
+                self.handle_response(data, (left_bound, left_bound + response_len))
+            {
+                println!("Finalize");
+                break;
+            }
         }
     }
 
@@ -150,36 +158,84 @@ impl<ManagerT: Manager> ManagerWrapper<ManagerT> for TestManagerWrapper<ManagerT
         self.send_request();
     }
 
-    fn start(mut self) -> Result<(), ManagerWrapperError<ManagerT, Self>> {
-        self.send_request()
+    fn start(mut self) -> Result<Vec<u8>, ManagerWrapperError<ManagerT, Self>> {
+        self.send_request();
+
+        Ok(self.mangaer.move_data())
     }
 }
 
-#[test]
-pub fn test_server() {
-    for _ in 0..100 {
+#[cfg(test)]
+pub mod server_tests {
+    use super::*;
+
+    #[test]
+    pub fn test_server_basic() {
+        for _ in 0..100 {
+            let server = Server::init_with_lower_bound(50);
+
+            let mut tm = TestManagerWrapper {
+                mangaer: BasicManager::new(server.get_len() as usize),
+                server,
+            };
+
+            tm.send_request();
+
+            let dl = tm.server.get_len();
+
+            println!("Data len: {}", dl);
+            println!("Server data: {:?}", tm.server.data);
+            println!("Recieved data: {:?}", tm.mangaer.data);
+
+            assert_eq!(
+                tm.server.data,
+                tm.mangaer
+                    .get_data()
+                    .into_iter()
+                    .map(|val| { *val })
+                    .collect::<Vec<u8>>()
+            );
+        }
+    }
+
+    use crate::RandomManager;
+    #[test]
+    pub fn test_server_random() {
         let server = Server::init_with_lower_bound(50);
+        for _ in 0..100 {
+            let server = server.clone();
+            let mut tm = TestManagerWrapper {
+                mangaer: RandomManager::<10>::new(server.get_len() as usize),
+                server,
+            };
 
-        let mut tm = TestManagerWrapper {
-            mangaer: BasicManager::new(server.get_len() as usize),
-            server,
-        };
+            tm.send_request();
 
-        tm.send_request();
+            let dl = tm.server.get_len();
 
-        let dl = tm.server.get_len();
+            println!("Data len: {}", dl);
+            println!("Server data: {:?}", tm.server.data);
+            println!("Recieved data: {:?}", tm.mangaer.data);
 
-        println!("Data len: {}", dl);
-        println!("Server data: {:?}", tm.server.data);
-        println!("Recieved data: {:?}", tm.mangaer.data);
+            assert!(
+                tm.mangaer
+                    .filled_list
+                    .get_complement_intervals(
+                        Chunk::new(0, tm.server.get_data_len()).expect("Chunk createiong")
+                    )
+                    .expect("complement intervals creation")
+                    .len()
+                    == 0
+            );
 
-        assert_eq!(
-            tm.server.data,
-            tm.mangaer
-                .get_data()
-                .into_iter()
-                .map(|val| { *val })
-                .collect::<Vec<u8>>()
-        );
+            assert_eq!(
+                tm.server.data,
+                tm.mangaer
+                    .get_data()
+                    .into_iter()
+                    .map(|val| { *val })
+                    .collect::<Vec<u8>>()
+            );
+        }
     }
 }

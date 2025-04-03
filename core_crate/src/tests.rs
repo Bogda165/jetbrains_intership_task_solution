@@ -29,7 +29,7 @@ pub mod tests {
     #[test]
     fn test_near() {
         let mut list = IntervalList::<usize>::new();
-        list.add_chunk(Chunk::new(0, 10).unwrap());
+        list.add_chunk(Chunk::new(0, 11).unwrap());
         list.add_chunk(Chunk::new(11, 20).unwrap());
 
         assert_eq!(list.len(), 1);
@@ -210,7 +210,7 @@ pub mod tests {
                 .get_complement_intervals((0, 30).try_into().unwrap())
                 .unwrap();
 
-            let expected_chunks = vec![(0, 10).try_into().unwrap(), (21, 30).try_into().unwrap()];
+            let expected_chunks = vec![(0, 10).try_into().unwrap(), (20, 30).try_into().unwrap()];
             let expected = IntervalList::from_intervals(expected_chunks).unwrap();
             assert_eq!(
                 comp_list, expected,
@@ -230,8 +230,8 @@ pub mod tests {
 
             let expected_chunks = vec![
                 (0, 10).try_into().unwrap(),
-                (21, 40).try_into().unwrap(),
-                (51, 100).try_into().unwrap(),
+                (20, 40).try_into().unwrap(),
+                (50, 100).try_into().unwrap(),
             ];
             let expected = IntervalList::from_intervals(expected_chunks).unwrap();
             assert_eq!(
@@ -250,7 +250,7 @@ pub mod tests {
                 .unwrap();
 
             let expected =
-                IntervalList::from_intervals(vec![(11, 20).try_into().unwrap()]).unwrap();
+                IntervalList::from_intervals(vec![(10, 20).try_into().unwrap()]).unwrap();
             assert_eq!(
                 comp_list, expected,
                 "Complement should handle interval at start of range"
@@ -277,13 +277,13 @@ pub mod tests {
         fn test_adjacent_intervals() {
             let mut list = IntervalList::new();
             list.add_chunk((10, 20).try_into().unwrap());
-            list.add_chunk((21, 30).try_into().unwrap());
+            list.add_chunk((20, 30).try_into().unwrap());
 
             let comp_list = list
                 .get_complement_intervals((0, 40).try_into().unwrap())
                 .unwrap();
 
-            let expected_chunks = vec![(0, 10).try_into().unwrap(), (31, 40).try_into().unwrap()];
+            let expected_chunks = vec![(0, 10).try_into().unwrap(), (30, 40).try_into().unwrap()];
             let expected = IntervalList::from_intervals(expected_chunks).unwrap();
             assert_eq!(
                 comp_list, expected,
@@ -349,12 +349,40 @@ pub mod tests {
                 .get_complement_intervals((0, 50).try_into().unwrap())
                 .unwrap();
 
-            let expected_chunks = vec![(0, 10).try_into().unwrap(), (41, 50).try_into().unwrap()];
+            let expected_chunks = vec![(0, 10).try_into().unwrap(), (40, 50).try_into().unwrap()];
             let expected = IntervalList::from_intervals(expected_chunks).unwrap();
             assert_eq!(
                 comp_list, expected,
                 "Complement should handle overlapping intervals correctly"
             );
+        }
+
+        #[test]
+        fn last_test() {
+            let mut list = IntervalList::new();
+            list.add_chunk((10, 27).try_into().unwrap());
+
+            let comp_list = list
+                .get_complement_intervals((0, 100).try_into().unwrap())
+                .unwrap();
+
+            let expected = IntervalList::from_intervals(vec![
+                (0, 10).try_into().unwrap(),
+                (27, 100).try_into().unwrap(),
+            ])
+            .unwrap();
+
+            assert_eq!(comp_list, expected);
+        }
+
+        #[test]
+        fn test_bug() {
+            let mut list = IntervalList::new();
+            list.add_chunk((10, 20).try_into().unwrap()).unwrap();
+
+            list.add_chunk((0, 10).try_into().unwrap()).unwrap();
+
+            assert_eq!(list.len(), 1);
         }
     }
 }

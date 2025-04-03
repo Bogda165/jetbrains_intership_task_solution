@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use crate::chunk::*;
 use crate::chunk_node::*;
 use errors::ChunkError;
@@ -160,7 +162,10 @@ impl<T: ChunkType> IntervalList<T> {
                             }
                             return Ok(());
                         }
-                        Err(e) => return Err(e),
+                        Err(e) => {
+                            println!("Error wtf");
+                            return Err(e);
+                        }
                     }
                 }
                 Overlaps::DoNotOverlaps => {
@@ -269,7 +274,7 @@ impl<T: ChunkType> IntervalList<T> {
                 list.add_chunk(chunk)?;
             };
 
-            last_chunk_end = current.end.clone().next();
+            last_chunk_end = current.end.clone();
             node = &current.next_chunk;
         }
 
@@ -278,6 +283,30 @@ impl<T: ChunkType> IntervalList<T> {
         }
 
         Ok(list)
+    }
+
+    pub fn get_interval_by_index(&self, idx: usize) -> Result<&Chunk<T>, std::io::Error> {
+        if idx >= self.len() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "The index went out of list length",
+            ));
+        }
+
+        let mut current = &self.head;
+
+        let mut cur_idx = 0;
+
+        while let Some(node) = current {
+            if cur_idx == idx {
+                return Ok(&node.chunk);
+            }
+
+            cur_idx += 1;
+            current = &node.next_chunk;
+        }
+
+        unreachable!("Function: get_inteverl_by_index, the part can not be reached");
     }
 }
 

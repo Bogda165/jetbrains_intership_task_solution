@@ -142,7 +142,10 @@ impl<T: ChunkType> Chunk<T> {
     pub fn try_combine(chunk1: Self, chunk2: Self) -> Result<Self, ChunkError<T>> {
         match Chunk::overlaps(&chunk1, &chunk2) {
             Overlaps::Overlaps => Err(ChunkError::ChunksOverlaps(chunk1, chunk2)),
-            Overlaps::CanBeOptimized => Chunk::new(chunk1.begin, chunk2.end),
+            Overlaps::CanBeOptimized => Chunk::new(
+                std::cmp::min(chunk1.begin, chunk2.begin),
+                std::cmp::max(chunk2.end, chunk1.end),
+            ),
             Overlaps::DoNotOverlaps => Err(ChunkError::ChunksDoNotOverlaps(chunk1, chunk2)),
         }
     }
