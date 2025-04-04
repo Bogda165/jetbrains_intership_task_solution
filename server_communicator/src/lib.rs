@@ -1,14 +1,14 @@
-use http_message::{
-    http_messages::{header::HeaderName, request::HttpRequest, response::HttpResponse},
+pub use http_message::{
+    http_messages::{request::HttpRequest, response::HttpResponse},
     serialize::*,
 };
 use std::{
     error::Error,
-    fmt::Display,
     io::{Read, Write},
     net::TcpStream,
-    sync::mpsc::{Receiver, RecvError, RecvTimeoutError, SendError, Sender, channel},
 };
+
+pub use std::sync::mpsc::{Receiver, RecvError, RecvTimeoutError, SendError, Sender, channel};
 
 /// Abstraction for communication with server. When the server will be updated to later http version, or will allow connection keep alive header. The Comunicator need to be improved.
 ///

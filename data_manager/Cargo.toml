@@ -5,4 +5,4 @@ edition = "2024"
 
 [dependencies]
 rand = "0.9.0"
-core_crate = { path = "../core_crate" }
+interval_list = { path = "../interval_list" }

@@ -1,7 +1,9 @@
-use data_manager::manager::{basic_manager::BasicManager, random_manager::RandomManager};
-use simple_solution::test_with_server;
+use crate::managers::{basic_manager::BasicManager, random_manager::RandomManager};
+use real_manager_wrapper::test_with_server;
 
-pub mod simple_solution;
+mod client;
+pub mod managers;
+mod real_manager_wrapper;
 
 fn get_addr(args: &Vec<String>) -> Result<String, std::io::Error> {
     let mut iterator = args.iter();
@@ -90,8 +92,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manager = get_manager(&args)?;
 
     let res_hash = manager.start(addr.as_str());
-
-    println!("Result hash: {}", res_hash);
 
     assert_eq!(hash, res_hash, "hashes of the same value must be the same");
 

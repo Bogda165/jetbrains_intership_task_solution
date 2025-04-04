@@ -3,9 +3,21 @@ name = "jetbrains_intership"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "jetbrains_intership"
+path = "src/main.rs"
+
+[lib]
+name = "managers"
+path = "src/managers.rs"
+
 [dependencies]
-sha2 = "0.9.5"
-core_crate = { path = "core_crate" }
+
+sha2 = "0.9.5" #Unfortuanetly I do not know sha256 hash algo by heart, and its feeling unfaire just copying it from a book
+rand = "0.9.0" #used only for presenation of random manager
+
+interval_list = { path = "interval_list" }
 data_manager = { path = "data_manager" }
 server_communicator = { path = "server_communicator" }
 http_message = { path = "http_message" }
+my_hex = { path = "my_hex" }
