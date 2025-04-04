@@ -91,7 +91,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let res_hash = manager.start(addr.as_str());
 
-    assert_eq!(hash, res_hash);
+    println!("Result hash: {}", res_hash);
+
+    assert_eq!(hash, res_hash, "hashes of the same value must be the same");
 
     Ok(())
 }
