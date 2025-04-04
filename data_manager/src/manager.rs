@@ -4,6 +4,8 @@ use errors::ManagerError;
 use crate::IntervalList;
 
 pub trait Manager {
+    fn init(data_len: usize) -> Self;
+
     fn get_filled_list(&self) -> &IntervalList<usize>;
 
     fn get_data(&self) -> &Vec<u8>;
@@ -116,6 +118,10 @@ pub mod basic_manager {
     }
 
     impl Manager for BasicManager {
+        fn init(data_len: usize) -> Self {
+            BasicManager::new(data_len)
+        }
+
         fn get_filled_list(&self) -> &IntervalList<usize> {
             &self.filled_list
         }
@@ -175,22 +181,28 @@ pub mod random_manager {
 
     use super::*;
 
-    pub struct RandomManager<const MIN_INTERVAL_LEN: usize> {
+    pub struct RandomManager {
         pub filled_list: IntervalList<usize>,
         pub data: Vec<u8>,
+        pub min_interval_len: usize,
     }
 
     /// the manager should be wait free, each time it receive any new data
-    impl<const MIN_INTERVAL_LEN: usize> RandomManager<MIN_INTERVAL_LEN> {
-        pub fn new(data_len: usize) -> Self {
+    impl RandomManager {
+        pub fn new(data_len: usize, min_interval_len: usize) -> Self {
             Self {
                 data: vec![0; data_len],
                 filled_list: IntervalList::new(),
+                min_interval_len,
             }
         }
     }
 
-    impl<const MIN_INTERVAL_LEN: usize> Manager for RandomManager<MIN_INTERVAL_LEN> {
+    impl Manager for RandomManager {
+        fn init(data_len: usize) -> Self {
+            RandomManager::new(data_len, data_len / 16)
+        }
+
         fn get_filled_list(&self) -> &IntervalList<usize> {
             &self.filled_list
         }
@@ -221,7 +233,7 @@ pub mod random_manager {
                     .get_interval_by_index(rng.random_range(0..free_amount))
                     .unwrap();
 
-                let left_bound = interval.begin + MIN_INTERVAL_LEN;
+                let left_bound = interval.begin + self.min_interval_len;
 
                 let request_chunk = if left_bound >= interval.end {
                     interval.clone()

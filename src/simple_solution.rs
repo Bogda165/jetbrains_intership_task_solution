@@ -226,60 +226,94 @@ impl<ManagerT: Manager> ManagerWrapper<ManagerT> for BasicManagerWrapper<Manager
     }
 }
 
+use hex;
+use sha2::Sha256;
+
+fn hash_to_string(data: Vec<u8>) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(&data);
+
+    let res = hasher.finalize();
+
+    hex::encode(res)
+}
+
+use data_manager::{
+    TestManagerWrapper, manager::random_manager::RandomManager, server_simulator::Server,
+};
+
+pub fn test_with_server<M: Manager>(server_addr: &str) -> String {
+    let (sc, (r, s)) = ServerCommunicator::new(server_addr).unwrap();
+    sc.start();
+    let client = Client::new(s, r).unwrap();
+    let data_len = client.data_len;
+    let bm = BasicManagerWrapper {
+        server: client,
+        manager: M::init(data_len),
+    };
+
+    //hash
+    let res = bm.start().unwrap();
+
+    hash_to_string(res)
+}
+
+fn test_simulation<M: Manager>() -> String {
+    let server = Server::init_with_lower_bound(50);
+
+    let mut tm = TestManagerWrapper {
+        mangaer: M::init(server.get_data_len()),
+        server,
+    };
+
+    tm.send_request();
+
+    let dl = tm.server.get_len();
+
+    println!("Data len: {}", dl);
+    println!("Server data: {:?}", tm.server.data);
+    println!("Recieved data: {:?}", tm.mangaer.get_data());
+
+    assert_eq!(
+        tm.server.data,
+        tm.mangaer
+            .get_data()
+            .into_iter()
+            .map(|val| { *val })
+            .collect::<Vec<u8>>()
+    );
+
+    hash_to_string(tm.mangaer.move_data())
+}
+
 #[cfg(test)]
-mod tests {
-    use data_manager::manager::random_manager::RandomManager;
-    use hex;
-    use sha2::Sha256;
+pub mod tests {
 
     use super::*;
 
     #[test]
-    fn test_prod() {
-        let (sc, (r, s)) = ServerCommunicator::new("127.0.0.1:8080").unwrap();
-        sc.start();
-        let client = Client::new(s, r).unwrap();
-        let data_len = client.data_len;
-        let bm = BasicManagerWrapper {
-            server: client,
-            manager: BasicManager::new(data_len),
-        };
-
-        let res = bm.start().unwrap();
-
-        let mut hasher = Sha256::new();
-        hasher.update(&res);
-
-        let res = hasher.finalize();
-
-        let res = hex::encode(res);
-
-        println!("{}", res);
+    fn test_prod_basic() {
+        println!(
+            "Hash: {}",
+            test_with_server::<BasicManager>("127.0.0.1:8080")
+        );
     }
 
-    const MIN_SERVER: usize = 64 * 1024;
-    //488852-554388
     #[test]
-    fn test_rand_manager_with_server() {
-        let (sc, (r, s)) = ServerCommunicator::new("127.0.0.1:8080").unwrap();
-        sc.start();
-        let client = Client::new(s, r).unwrap();
-        let data_len = client.data_len;
+    fn test_prod_radnom() {
+        println!(
+            "Hash: {}",
+            test_with_server::<RandomManager>("127.0.0.1:8080")
+        );
+    }
 
-        let bm = BasicManagerWrapper {
-            server: client,
-            manager: RandomManager::<MIN_SERVER>::new(data_len),
-        };
+    #[test]
+    fn test_basic() {
+        test_simulation::<BasicManager>();
+    }
 
-        let res = bm.start().unwrap();
-
-        let mut hasher = Sha256::new();
-        hasher.update(&res);
-
-        let res = hasher.finalize();
-
-        let res = hex::encode(res);
-
-        println!("{}", res);
+    #[test]
+    fn test_radnom() {
+        test_simulation::<RandomManager>();
     }
 }

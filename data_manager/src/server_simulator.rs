@@ -100,7 +100,7 @@ impl Server {
         }
     }
 
-    pub(crate) fn init_with_lower_bound(lb: u8) -> Self {
+    pub fn init_with_lower_bound(lb: u8) -> Self {
         Self::init(|| ((OsRng.try_next_u32().unwrap() as u8).saturating_sub(lb) + lb) as u8)
     }
 

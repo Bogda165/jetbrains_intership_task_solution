@@ -1,64 +1,97 @@
-use core::fmt;
-use std::{
-    error::Error,
-    fmt::Display,
-    io::{Read, Write},
-    net::TcpStream,
-    sync::mpsc::{RecvError, SendError, channel},
-};
+use data_manager::manager::{basic_manager::BasicManager, random_manager::RandomManager};
+use simple_solution::test_with_server;
 
 pub mod simple_solution;
 
-use std::sync::mpsc::{Receiver, Sender};
+fn get_addr(args: &Vec<String>) -> Result<String, std::io::Error> {
+    let mut iterator = args.iter();
 
-use http_message::http_messages::{
-    header::HeaderName,
-    path::Path,
-    request::{HttpRequest, HttpRequestMethod},
-    response::HttpResponse,
-};
+    while let Some(val) = iterator.next() {
+        if val.as_str() == "--addr" {
+            break;
+        }
+    }
 
-use server_communicator::{ServerCommunicator, ServerCommunicatorError};
+    if let Some(addr) = iterator.next() {
+        Ok(addr.clone())
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "The run script must include server address",
+        ))
+    }
+}
+
+fn get_hash(args: &Vec<String>) -> Result<String, std::io::Error> {
+    let mut iterator = args.iter();
+
+    while let Some(val) = iterator.next() {
+        if val.as_str() == "--hash" {
+            break;
+        }
+    }
+
+    if let Some(hash) = iterator.next() {
+        Ok(hash.clone())
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "The run script must include hash of the data",
+        ))
+    }
+}
+
+pub enum ManagerType {
+    BasicManager,
+    RandomManager,
+}
+
+impl ManagerType {
+    fn start(self, addr: &str) -> String {
+        match self {
+            ManagerType::BasicManager => test_with_server::<BasicManager>(addr),
+            ManagerType::RandomManager => test_with_server::<RandomManager>(addr),
+        }
+    }
+}
+
+fn get_manager(args: &Vec<String>) -> Result<ManagerType, std::io::Error> {
+    let mut iterator = args.iter();
+
+    while let Some(val) = iterator.next() {
+        if val.as_str() == "--manager" {
+            break;
+        }
+    }
+
+    if let Some(manager) = iterator.next() {
+        match manager.as_str() {
+            "basic_manager" => Ok(ManagerType::BasicManager),
+            "random_manager" => Ok(ManagerType::RandomManager),
+            _ => Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "no such manager",
+            )),
+        }
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "The run script must include server address",
+        ))
+    }
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut request = HttpRequest::new(HttpRequestMethod::GET, Path::default(), "HTTP/1.1");
+    let args: Vec<String> = std::env::args().collect();
 
-    request.add_header("Host", "127.0.0.1:8080");
-    request.add_header("User-Agent", "Rust-Client/1.0");
-    request.add_header("Connection", "close");
-    request.add_header("Range", "bytes=1-1000");
+    let addr = get_addr(&args)?;
+    let hash = get_hash(&args)?;
 
-    let (communicator, (receiver, sender)) = ServerCommunicator::new("127.0.0.1:8080").unwrap();
-    communicator.start();
+    let manager = get_manager(&args)?;
 
-    let _sender = sender.clone();
-    std::thread::scope(move |f| {
-        f.spawn(move || {
-            for _ in 0..11 {
-                let response = receiver
-                    .recv_timeout(std::time::Duration::from_secs(5))
-                    .unwrap();
+    let res_hash = manager.start(addr.as_str());
 
-                println!("{}", response);
-            }
-        });
-
-        f.spawn(move || {
-            for _ in 0..10 {
-                _sender.send(request.clone()).unwrap();
-            }
-            println!("all requests have been sent");
-        });
-    });
-
-    let mut terminate_request =
-        HttpRequest::new(HttpRequestMethod::GET, Path::default(), "HTTP/1.1");
-
-    terminate_request.add_header("X-Force-Terminate", "");
-
-    sender.send(terminate_request.clone()).unwrap();
-    std::thread::sleep(std::time::Duration::from_secs(5));
-    sender.send(terminate_request.clone()).unwrap();
+    assert_eq!(hash, res_hash);
 
     Ok(())
 }

@@ -112,9 +112,9 @@ pub trait ManagerWrapper<ManagerT: Manager> {
         Self: Sized;
 }
 
-struct TestManagerWrapper<ManagerT: Manager> {
-    server: Server,
-    mangaer: ManagerT,
+pub struct TestManagerWrapper<ManagerT: Manager> {
+    pub server: Server,
+    pub mangaer: ManagerT,
 }
 
 impl<ManagerT: Manager> ManagerWrapper<ManagerT> for TestManagerWrapper<ManagerT> {
