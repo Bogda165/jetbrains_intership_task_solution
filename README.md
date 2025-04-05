@@ -9,7 +9,7 @@ The task involves interacting with a glitchy HTTP server that sends randomized d
 Rather than simply implementing a basic client, I decided to try to design a maintainable, extensible system architecture. This approach allows for trying different data retrieval strategies, testing components in isolation, and adapting to potential future changes in server behavior. The system is built with clean(in my opinion) interfaces between components, making it easy to swap out different manager implementations for experimenting with various retrieval algorithms.
 
 ## Hex
-Very simple implementation of hex encodoing from byte array.
+A very simple implementation of hex encoding from a byte array.
 
 ## Interval List
 During the task we literally works with chunks of random length, so I think there is no needed explation, why I choise this ds.
@@ -36,20 +36,20 @@ As the send operation is very cheap and comletely non-blocking, the main applica
 
 ## Manager
 The manager is responsible for manage the current state of the data. It has 2 core function request and receive methods.
-- Receive method handle incoming chunks (in current implementaion it also call the request method, but its unnecessary to do so, because )
-- Request method send request chunk, an important part is that idealy response should be deppended only on the current state of the manager, not on the last received response. Due to this restriction, it would be easier to design more complex systems.
+- Receive method handle incoming chunks (in current implementaion it also call the request method, but this is not strictly necessary.
+- Request method send request chunk. Ideally, it should base decisions purely on the current state, not previous responses, to allow for easier testing and more flexible implementations.
 
 Currently I implemented 2 types of managers:
-1. A *Simple manager* which request data from the current left bound until the max data len. and repeat it until the wholde data will be received.
-2. A *Random manager* which request random chunks of unknown data. It took aprroximately 40 minutes to implement and test this manager using existing apis.
+1. A *Simple manager* - request data from the current left bound until the max data len. and repeat it until the wholde data will be received.
+2. A *Random manager* - request random chunks of unknown data. It took aprroximately 40 minutes to implement and test this manager using existing apis.
 
 
-Becase the server is single threaded, I do not see better implementaion then the current one. But when server switch at least at HTTP1/1 and parallel requests processing will be available, it would become possible to take a profit from more complex managers.
+Because the server is single threaded, I do not see better implementaion then the current one. But as server potentially switches to HTTP1/1+ and parallel requests processing will be available, it would become possible to take a profit from more complex managers.
 
 ## Manager Wrapper
-Its very imporatnt to test managers, and it would be hard and unperfomant to test different managers with real the server. So I added a manager wrapper that allow to test managers with different data holders(server). I implemented faster copy of original  server, which generate a random chunk of data from the range without any timeouts.
+Its very imporatnt to test managers, and it would be hard and unperfomant to test different managers with real server. So I added a manager wrapper that allow to test managers with different data holders(server) without networking and servers timeouts.
 
-Also its the place where you can change the programs workflow, create serialize and deserialize http messages, and in the end add some overhead logic.
+This is also where program flow, HTTP message handling, and additional logic can be injected. Currently, the manager's `request` method is triggered on every received response, but this could be improved (to support parallel or batched requests).
 
 In current implemenatin request manager's method is called on each receiver response, but it unnecessary to do so, for example you could implement some parallel system.
 
