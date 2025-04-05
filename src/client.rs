@@ -9,9 +9,14 @@ pub struct Client {
     // ussually http servers answer with content-range header, but as our server does not do it, I will need this field(
     last_chunk_start_point: usize,
     data_len: usize,
+    addr: String,
 }
 
 impl Client {
+    fn get_server_addr(&self) -> &String {
+        &self.addr
+    }
+
     fn check_response(response: HttpResponse) -> Result<(Vec<u8>, usize), ServerCommunicatorError> {
         if response.result != 206 && response.result != 200 {
             return Err(ServerCommunicatorError::SerializeError(format!(
@@ -31,12 +36,13 @@ impl Client {
     }
 
     pub fn new(
+        addr: &str,
         sender: Sender<HttpRequest>,
         receiver: Receiver<HttpResponse>,
     ) -> Result<Self, ServerCommunicatorError> {
         let mut request = HttpRequest::new(HttpRequestMethod::GET, Path::default(), "HTTP/1.1");
 
-        request.add_header("Host", "127.0.0.1:8080");
+        request.add_header("Host", addr);
         request.add_header("User-Agent", "Rust-Client/1.0");
         request.add_header("Connection", "close");
 
@@ -44,6 +50,7 @@ impl Client {
 
         let response = receiver.recv_timeout(std::time::Duration::from_secs(10))?;
         if let Some(length) = response.headers.get(&"Content-Length".into()) {
+            #[cfg(debug_assertions)]
             println!("Parsing: {}", length.value);
             let len = length
                 .value
@@ -59,6 +66,7 @@ impl Client {
                 })?;
 
             Ok(Self {
+                addr: addr.to_string(),
                 sender,
                 receiver,
                 last_chunk_start_point: 0,
@@ -80,13 +88,13 @@ impl DataHolder for Client {
     type E = ClientError;
 
     fn request(&mut self, bounds: (usize, usize)) -> Result<(), Self::E> {
-        #[cfg(test)]
+        #[cfg(debug_assertions)]
         println!("Try sending the request");
         let mut request = HttpRequest::new(HttpRequestMethod::GET, Path::default(), "HTTP/1.1");
 
-        request.add_header("Host", "127.0.0.1:8080");
+        request.add_header("Host", &self.addr);
         request.add_header("User-Agent", "Rust-Client/1.0");
-        println!("requesting bounds = {}-{}", bounds.0, bounds.1);
+        println!("Requesting bounds = {}-{}", bounds.0, bounds.1);
 
         request.add_header("Range", &format!("bytes={}-{}", bounds.0, bounds.1));
 
@@ -104,7 +112,8 @@ impl DataHolder for Client {
             .map_err(|err| Into::<ServerCommunicatorError>::into(err))?;
 
         let results = Self::check_response(response)?;
-        println!("HUI: received data with length: {}", results.1);
+        #[cfg(debug_assertions)]
+        println!("Received data with length: {}", results.1);
         let bounds = (
             self.last_chunk_start_point,
             self.last_chunk_start_point + results.1,

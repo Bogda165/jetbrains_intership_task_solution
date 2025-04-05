@@ -35,7 +35,6 @@ impl ToHex for char {
 }
 
 mod tests {
-    use super::*;
 
     #[test]
     fn test_single_byte() {

@@ -90,7 +90,6 @@ pub mod errors {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             match self {
                 Self::TheDataIsFilled => write!(f, "the data is already filled"),
-                _ => unreachable!(),
             }
         }
     }

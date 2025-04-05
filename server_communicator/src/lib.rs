@@ -80,15 +80,12 @@ impl std::fmt::Display for ServerCommunicatorError {
             Self::ChannelError(msg) => write!(f, "Channler error {}", msg),
             Self::Terminate => write!(f, "The communicator was terminated"),
             Self::TimeOutError(msg) => write!(f, "Timeout in {}", msg),
-            _ => unreachable!(),
         }
     }
 }
 
 impl ServerCommunicator {
-    pub fn new(
-        ip: &str,
-    ) -> Result<(Self, (Receiver<HttpResponse>, Sender<HttpRequest>)), std::io::Error> {
+    pub fn new() -> Result<(Self, (Receiver<HttpResponse>, Sender<HttpRequest>)), std::io::Error> {
         //create both chanels
         let (tx_request, rx_request): (Sender<HttpRequest>, Receiver<HttpRequest>) = channel();
         let (tx_response, rx_response): (Sender<HttpResponse>, Receiver<HttpResponse>) = channel();
@@ -142,7 +139,10 @@ impl ServerCommunicator {
         std::thread::spawn(move || {
             while let Ok(request) = self.requests.recv() {
                 match self.workflow(request) {
-                    Ok(_) => println!("The value was send through the channel"),
+                    Ok(_) => {
+                        #[cfg(debug_assertions)]
+                        println!("The value was send through the channel")
+                    }
                     Err(err) => match err {
                         ServerCommunicatorError::Terminate => {
                             eprintln!("Terminatin message was received, droping channels");

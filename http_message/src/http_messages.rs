@@ -1,5 +1,3 @@
-use crate::serialize::Serialize;
-
 pub mod path {
     #[derive(Debug, Clone)]
     pub struct Path {
@@ -171,14 +169,14 @@ pub mod response {
 
                     // the string will always have at least first element
                     let protocol = std::str::from_utf8(elements.next().unwrap())
-                        .map_err(|err| "utf8 error while parsing (element 1)")?;
+                        .map_err(|_| "utf8 error while parsing (element 1)")?;
 
                     let result = std::str::from_utf8(if let Some(val) = elements.next() {
                         Ok(val)
                     } else {
                         Err("there is only one element in first string")
                     }?)
-                    .map_err(|err| "utf8 error while parsing(element 2)")?
+                    .map_err(|_| "utf8 error while parsing(element 2)")?
                     .parse::<u16>()
                     .map_err(|err| format!("{:?}", err))?;
 
@@ -187,7 +185,7 @@ pub mod response {
                     } else {
                         Err("there is only one element in first string")
                     }?)
-                    .map_err(|err| "utf8 error while parsing(element 2)")?;
+                    .map_err(|_| "utf8 error while parsing(element 2)")?;
 
                     if !elements.next().is_none() {
                         // Err(format!(
@@ -211,6 +209,7 @@ pub mod response {
                         .map_err(|err| format!("{:?}", err))?
                         .is_empty()
                     {
+                        #[cfg(debug_assertions)]
                         println!("header amount: {}", header_amount);
                         break;
                     }
@@ -244,6 +243,7 @@ pub mod response {
                     };
                     let header = header?;
 
+                    #[cfg(debug_assertions)]
                     println!("Header: {}:{}", header.0, header.1);
 
                     map.insert(
@@ -292,7 +292,6 @@ pub mod request {
     use header::{HeaderName, HeaderValue};
     use message::HttpMessage;
     use path::Path;
-    use response::HttpResponse;
     #[derive(Debug, Clone)]
     pub enum HttpRequestMethod {
         GET,

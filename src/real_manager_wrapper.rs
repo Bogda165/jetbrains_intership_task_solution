@@ -76,9 +76,9 @@ fn hash_to_string(data: Vec<u8>) -> String {
 }
 
 pub fn test_with_server<M: Manager>(server_addr: &str) -> String {
-    let (sc, (r, s)) = ServerCommunicator::new(server_addr).unwrap();
+    let (sc, (r, s)) = ServerCommunicator::new().unwrap();
     sc.start();
-    let client = Client::new(s, r).unwrap();
+    let client = Client::new(server_addr, s, r).unwrap();
     let data_len = client.get_data_len();
     let bm = RealManagerWrapper {
         server: client,

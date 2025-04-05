@@ -35,7 +35,6 @@ pub mod errors {
                 ChunkError::IncorrectChunksOrder(chunk1, chunk2) => {
                     write!(f, "Chunk2: {} is located before chunk1: {}", chunk2, chunk1)
                 }
-                _ => write!(f, "unimplemented error"),
             }
         }
     }
@@ -97,7 +96,6 @@ impl<T: ChunkType> IntervalList<T> {
                                 .unwrap()
                                 {
                                     OverlapType::Left => {
-                                        println!("HUI");
                                         node.end = node.next_chunk.as_ref().unwrap().end.clone()
                                     }
                                     OverlapType::Right => unreachable!(
@@ -165,7 +163,6 @@ impl<T: ChunkType> IntervalList<T> {
                             return Ok(());
                         }
                         Err(e) => {
-                            println!("Error wtf");
                             return Err(e);
                         }
                     }

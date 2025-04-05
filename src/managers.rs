@@ -61,7 +61,7 @@ pub mod basic_manager {
             chunk: Vec<u8>,
             chunk_bounds: (usize, usize),
         ) -> Result<(), ManagerError> {
-            println!("chunk_bounds: {}-{}", chunk_bounds.0, chunk_bounds.1);
+            println!("Received = {}-{}", chunk_bounds.0, chunk_bounds.1);
             self.data[chunk_bounds.0 as usize..chunk_bounds.1 as usize]
                 .copy_from_slice(chunk.as_slice());
             self.filled_list
@@ -157,7 +157,7 @@ pub mod random_manager {
         ) -> Result<(), ManagerError> {
             assert!(chunk.len() > 0);
 
-            println!("chunk_bounds: {}-{}", chunk_bounds.0, chunk_bounds.1);
+            println!("Received : {}-{}", chunk_bounds.0, chunk_bounds.1);
             self.data[chunk_bounds.0 as usize..chunk_bounds.1 as usize]
                 .copy_from_slice(chunk.as_slice());
             self.filled_list
