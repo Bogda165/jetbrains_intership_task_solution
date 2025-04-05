@@ -1,7 +1,12 @@
+
 # Jetbrains intership task solution
-As I really enjoy programiring in rust, I will use it to implement this project.
+Science I really enjoy programiring in rust, I will use it to implement this project.
 
 ## Task
+
+The task involves interacting with a glitchy HTTP server that sends randomized data in partial chunks. The server supports the HTTP "Range" header, allowing clients to request specific portions of data. The goal is to write a client application that successfully downloads the complete binary data despite the server's unreliable behavior. The downloaded data must be verified by comparing its SHA-256 hash with the hash displayed by the server.
+
+Rather than simply implementing a basic client, I decided to try to design a maintainable, extensible system architecture. This approach allows for trying different data retrieval strategies, testing components in isolation, and adapting to potential future changes in server behavior. The system is built with clean(in my opinion) interfaces between components, making it easy to swap out different manager implementations for experimenting with various retrieval algorithms.
 
 ## Hex
 Very simple implementation of hex encodoing from byte array.
@@ -83,6 +88,11 @@ The manager argument stands for the type of manager program uses (for new manage
 
 (to see my logs just run in dev mode (without release feature))
 
+You can also configure environment variables:
+
+- HASH: hash of servers data
+- ADDR: address of server
+- MANAGER: type of manager program uses
 
 ### Tests:
 If you want to run the application in tests mode, to test managers on server simulation, you can just
